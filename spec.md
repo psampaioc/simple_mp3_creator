@@ -369,11 +369,13 @@ user_id              uuid not null
 title                 text not null
 source_text           text not null
 character_count       integer not null
-voice_id              text not null
-locale                text not null
-speech_rate           text not null
+voice_id               text not null
+locale                 text not null
+speech_rate            text not null
 author                 text null
-status                 text not null
+output_format          text not null default 'mp3'
+cover_asset_id         uuid null
+ status                 text not null
 duration_ms            integer null
 output_size_bytes      bigint null
 output_bitrate         integer null
