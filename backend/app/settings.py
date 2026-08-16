@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     tts_provider: str = "fake"
     edge_tts_voice: str = "en-US-AriaNeural"
     cors_origins: str = "http://localhost:3000"
+    supabase_url: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

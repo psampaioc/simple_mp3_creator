@@ -10,6 +10,11 @@ def test_health() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_authenticated_identity_requires_bearer_token() -> None:
+    response = TestClient(app).get("/v1/auth/me")
+    assert response.status_code == 401
+
+
 def test_project_api_uses_local_job_flow(tmp_path, monkeypatch) -> None:
     app.state.local_store = LocalStore(f"sqlite:///{tmp_path / 'local.db'}", str(tmp_path / "storage"))
     response = TestClient(app).post(

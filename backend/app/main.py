@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app.auth import CurrentUser, current_user
 from app.local_flow import LocalStore, generate_audio, project_json
 from app.media import normalize_text
 from app.settings import settings
@@ -52,6 +53,12 @@ def list_voices(locale: str | None = Query(default=None, max_length=16)) -> list
     if locale is None:
         return VOICE_CATALOG
     return [voice for voice in VOICE_CATALOG if voice["locale"] == locale]
+
+
+@app.get("/v1/auth/me")
+def authenticated_identity(user: CurrentUser = Depends(current_user)) -> dict[str, str]:
+    """Small protected probe used by the frontend and auth integration tests."""
+    return {"id": user.id, "role": user.role}
 
 
 @app.post("/v1/projects", status_code=status.HTTP_202_ACCEPTED)
