@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements.worker.txt requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir -r requirements.worker.txt
+COPY app ./app
+COPY worker ./worker
+COPY models ./models
+
+ENV PYTHONPATH=/app
+CMD ["python", "-m", "worker.main"]

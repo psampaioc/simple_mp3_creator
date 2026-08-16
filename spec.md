@@ -168,11 +168,11 @@ FastAPI container
   +---------------------> Supabase private Storage
   |
   v
-Optional Python worker (same backend image)
-  |-- edge-tts
-  |-- Pillow
-  |-- mutagen
-  `-- FFmpeg/ffprobe for audio only
+Standalone Python worker container
+  |-- claims PostgreSQL jobs with a service-only Supabase key
+  |-- Piper TTS model and local inference
+  |-- Pillow and mutagen
+  `-- FFmpeg for WAV-to-MP3 encoding only
 ```
 
 ### 6.1 Architectural decision: media generation stays off Vercel
@@ -187,7 +187,7 @@ Vercel/Next.js is strictly the frontend and may expose only lightweight routes s
 - Hold a request open for long media work.
 - Proxy large media bytes when a signed Storage URL can upload/download directly.
 
-This boundary avoids serverless execution-duration risk, ephemeral-filesystem constraints, binary packaging complexity, memory spikes, and duplicated backend logic. All media work belongs in the containerized FastAPI deployment or its worker using the same Python application package.
+This boundary avoids serverless execution-duration risk, ephemeral-filesystem constraints, binary packaging complexity, memory spikes, and duplicated backend logic. All media work belongs in the standalone worker container. The FastAPI deployment only validates requests, creates jobs, serves status, and issues signed URLs.
 
 ### 6.2 Synchronous versus asynchronous processing
 

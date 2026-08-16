@@ -1,0 +1,41 @@
+name: Media worker
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: simple-mp3-media-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  process-one-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATA_BACKEND: supabase
+      TTS_PROVIDER: piper
+      WORKER_ONCE: "true"
+      PIPER_MODEL_PATH: ${{ github.workspace }}/backend/models/en_US-amy-low.onnx
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install audio dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg wget
+      - name: Install worker dependencies
+        run: python -m pip install --disable-pip-version-check -r backend/requirements.worker.txt
+      - name: Download pinned Piper voice
+        working-directory: backend/models
+        run: |
+          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx
+          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx.json
+      - name: Process one queued media job
+        run: python -m worker.main
+        working-directory: backend
+        env:
+          PYTHONPATH: .

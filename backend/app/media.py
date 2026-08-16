@@ -99,6 +99,28 @@ class EdgeTTSProvider:
         await edge_tts.Communicate(text, self.voice).save(str(output_path))
 
 
+@dataclass(frozen=True)
+class PiperTTSProvider:
+    model_path: str
+
+    async def synthesize(self, text: str, output_path: Path) -> None:
+        """Run the locally hosted Piper CLI and convert its WAV output to MP3."""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wav_path = output_path.with_suffix(".wav")
+        command = ["piper", "--model", self.model_path, "--output_file", str(wav_path)]
+        process = await asyncio.create_subprocess_exec(
+            *command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await process.communicate(text.encode("utf-8"))
+        if process.returncode != 0:
+            raise RuntimeError(f"Piper synthesis failed: {stderr.decode('utf-8', errors='replace')[-500:]}")
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise RuntimeError("ffmpeg is required to encode Piper WAV output as MP3")
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", "192k", "-y", str(output_path)], check=True, capture_output=True)
+        wav_path.unlink(missing_ok=True)
+
+
 def synthesize_sync(provider: TTSProvider, text: str, output_path: Path) -> None:
     asyncio.run(provider.synthesize(text, output_path))
 
