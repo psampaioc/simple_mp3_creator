@@ -523,7 +523,7 @@ Run a small opt-in live-provider smoke test on a schedule or before release, not
 To keep each change independently verifiable, implement the MVP in these local-first slices:
 
 1. **Media foundation:** normalization, conservative chunking, provider adapters, valid local MP3 fixture, artwork validation, ID3/APIC, and media tests.
-2. **Local application flow:** typed project/job models, SQLite-backed repositories, generation service, status polling endpoints, and local filesystem storage. This slice uses fake TTS by default and requires no Supabase credentials.
+2. **Local application flow:** typed project/job models, SQLite-backed repositories, generation service, status polling endpoints, and local filesystem storage. This slice uses fake TTS by default and requires no Supabase credentials. An in-process background task is acceptable as a development adapter only; it is not the production worker or a durable queue.
 3. **Managed boundary:** Supabase migrations, Auth/JWT verification, private Storage signed URLs, RLS, quota ledger, and a worker claim loop. Validate locally against a disposable Supabase-compatible environment before any hosted change.
 4. **Product surface:** authenticated Next.js routes, accessible project form/status UI, and end-to-end tests.
 

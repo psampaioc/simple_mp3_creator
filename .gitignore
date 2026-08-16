@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 backend/.coverage
+data/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
@@ -13,4 +14,3 @@ dist/
 *.egg-info/
 supabase/.branches/
 supabase/.temp/
-
