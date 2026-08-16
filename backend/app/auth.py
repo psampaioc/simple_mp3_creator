@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -46,7 +47,13 @@ def _decode_token(token: str) -> dict[str, object]:
         raise ValueError("token signing key not found")
     issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1"
     algorithm = header.get("alg", "RS256")
-    signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+    key_type = key_data.get("kty")
+    if key_type == "EC":
+        signing_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(key_data))
+    elif key_type == "RSA":
+        signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
+    else:
+        raise ValueError("unsupported token signing key")
     return jwt.decode(token, signing_key, algorithms=[algorithm], audience="authenticated", issuer=issuer)
 
 
