@@ -65,6 +65,20 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase returned an unexpected project list")
         return rows
 
+    def create_job(self, access_token: str, job: dict[str, Any]) -> dict[str, Any]:
+        response = self._request(
+            "POST",
+            "jobs",
+            access_token,
+            params={"select": "*"},
+            headers={"Prefer": "return=representation"},
+            json=job,
+        )
+        rows = response.json()
+        if not isinstance(rows, list) or len(rows) != 1:
+            raise SupabaseAPIError("Supabase returned an unexpected job response")
+        return rows[0]
+
     def get_project(self, access_token: str, project_id: str) -> dict[str, Any] | None:
         response = self._request(
             "GET",

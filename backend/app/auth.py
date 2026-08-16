@@ -17,6 +17,7 @@ from app.settings import settings
 class CurrentUser:
     id: str
     role: str
+    access_token: str = ""
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -58,6 +59,13 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
         role = claims.get("role")
         if not isinstance(user_id, str) or not isinstance(role, str):
             raise ValueError("token subject or role is invalid")
-        return CurrentUser(id=user_id, role=role)
+        return CurrentUser(id=user_id, role=role, access_token=credentials.credentials)
     except (httpx.HTTPError, jwt.PyJWTError, ValueError, KeyError, RuntimeError) as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid authentication token") from error
+
+
+def optional_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> CurrentUser | None:
+    """Keep the local adapter anonymous while requiring auth in managed mode."""
+    if credentials is None:
+        return None
+    return current_user(credentials)

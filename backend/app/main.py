@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.auth import CurrentUser, current_user
+from app.auth import CurrentUser, current_user, optional_current_user
 from app.local_flow import LocalStore, generate_audio, project_json
 from app.media import normalize_text
 from app.settings import settings
@@ -43,6 +43,16 @@ def local_store() -> LocalStore:
     return store
 
 
+def managed_api():
+    from app.supabase_api import SupabaseAPI
+
+    return SupabaseAPI(settings.supabase_url, settings.supabase_publishable_key)
+
+
+def managed_project_json(project: dict[str, object | None]) -> dict[str, object | None]:
+    return {**project, "stage": project.get("status")}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
@@ -62,10 +72,38 @@ def authenticated_identity(user: CurrentUser = Depends(current_user)) -> dict[st
 
 
 @app.post("/v1/projects", status_code=status.HTTP_202_ACCEPTED)
-def create_project(payload: ProjectCreate, background_tasks: BackgroundTasks) -> dict[str, object | None]:
+def create_project(
+    payload: ProjectCreate,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser | None = Depends(optional_current_user),
+) -> dict[str, object | None]:
     source_text = normalize_text(payload.text)
     if not source_text:
         raise HTTPException(status_code=422, detail="text must contain non-whitespace content")
+    if settings.data_backend == "supabase":
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        locale = next((voice["locale"] for voice in VOICE_CATALOG if voice["id"] == payload.voice_id), "und")
+        project = managed_api().create_project(
+            user.access_token,
+            {
+                "user_id": user.id,
+                "title": payload.title.strip(),
+                "source_text": source_text,
+                "character_count": len(source_text),
+                "voice_id": payload.voice_id,
+                "locale": locale,
+                "speech_rate": payload.speech_rate,
+                "author": payload.author,
+                "output_format": payload.output_format,
+                "status": "queued",
+            },
+        )
+        managed_api().create_job(
+            user.access_token,
+            {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
+        )
+        return managed_project_json(project)
     project = local_store().create_project(
         title=payload.title.strip(),
         source_text=source_text,
@@ -78,12 +116,23 @@ def create_project(payload: ProjectCreate, background_tasks: BackgroundTasks) ->
 
 
 @app.get("/v1/projects")
-def list_projects() -> list[dict[str, object | None]]:
+def list_projects(user: CurrentUser | None = Depends(optional_current_user)) -> list[dict[str, object | None]]:
+    if settings.data_backend == "supabase":
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        return [managed_project_json(project) for project in managed_api().list_projects(user.access_token)]
     return [project_json(project) for project in local_store().list_projects()]
 
 
 @app.get("/v1/projects/{project_id}")
-def get_project(project_id: str) -> dict[str, object | None]:
+def get_project(project_id: str, user: CurrentUser | None = Depends(optional_current_user)) -> dict[str, object | None]:
+    if settings.data_backend == "supabase":
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        project = managed_api().get_project(user.access_token, project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        return managed_project_json(project)
     try:
         return project_json(local_store().get_project(project_id))
     except KeyError as error:
