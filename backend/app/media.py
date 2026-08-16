@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import re
+import shutil
 import subprocess
 import unicodedata
 from dataclasses import dataclass
@@ -71,9 +72,14 @@ class FakeTTSProvider:
     async def synthesize(self, text: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         del text  # The fake provider models successful synthesis, not speech quality.
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            bundled = Path(__file__).with_name("assets") / "fake-silence.mp3"
+            shutil.copyfile(bundled, output_path)
+            return
         subprocess.run(
             [
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi",
                 "-i", "anullsrc=r=44100:cl=mono", "-t", str(self.duration_seconds),
                 "-c:a", "libmp3lame", "-b:a", "192k", "-y", str(output_path),
             ],

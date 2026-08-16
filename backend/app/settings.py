@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     edge_tts_voice: str = "en-US-AriaNeural"
     cors_origins: str = "http://localhost:3000"
     supabase_url: str = ""
+    supabase_publishable_key: str = ""
+    supabase_secret_key: str = ""
+    # Backward-compatible fallback for projects still using the legacy key.
+    supabase_service_role_key: str = ""
+    data_backend: str = "local"
+    cron_secret: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

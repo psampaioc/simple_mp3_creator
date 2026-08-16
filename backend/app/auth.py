@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -17,6 +18,7 @@ from app.settings import settings
 class CurrentUser:
     id: str
     role: str
+    access_token: str = ""
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -45,7 +47,13 @@ def _decode_token(token: str) -> dict[str, object]:
         raise ValueError("token signing key not found")
     issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1"
     algorithm = header.get("alg", "RS256")
-    signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+    key_type = key_data.get("kty")
+    if key_type == "EC":
+        signing_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(key_data))
+    elif key_type == "RSA":
+        signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
+    else:
+        raise ValueError("unsupported token signing key")
     return jwt.decode(token, signing_key, algorithms=[algorithm], audience="authenticated", issuer=issuer)
 
 
@@ -58,6 +66,13 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
         role = claims.get("role")
         if not isinstance(user_id, str) or not isinstance(role, str):
             raise ValueError("token subject or role is invalid")
-        return CurrentUser(id=user_id, role=role)
+        return CurrentUser(id=user_id, role=role, access_token=credentials.credentials)
     except (httpx.HTTPError, jwt.PyJWTError, ValueError, KeyError, RuntimeError) as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid authentication token") from error
+
+
+def optional_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> CurrentUser | None:
+    """Keep the local adapter anonymous while requiring auth in managed mode."""
+    if credentials is None:
+        return None
+    return current_user(credentials)

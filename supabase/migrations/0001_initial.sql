@@ -33,6 +33,9 @@ create table if not exists public.projects (
   deleted_at timestamptz
 );
 
+alter table public.projects
+  add column if not exists expires_at timestamptz not null default timezone('utc', now()) + interval '24 hours';
+
 create table if not exists public.jobs (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null unique references public.projects(id) on delete cascade,
@@ -63,6 +66,12 @@ create table if not exists public.assets (
   created_at timestamptz not null default timezone('utc', now()),
   expires_at timestamptz
 );
+
+alter table public.assets
+  alter column expires_at set default timezone('utc', now()) + interval '24 hours';
+
+create index if not exists projects_expiry_idx on public.projects(expires_at);
+create index if not exists assets_expiry_idx on public.assets(expires_at);
 
 alter table public.projects
   add constraint projects_cover_asset_fk
@@ -128,12 +137,15 @@ create policy projects_delete_own on public.projects for delete using (auth.uid(
 
 -- Jobs and usage transitions are backend-service operations only.
 create policy jobs_select_own on public.jobs for select using (auth.uid() = user_id);
+create policy jobs_insert_own on public.jobs for insert with check (auth.uid() = user_id);
 
 create policy assets_select_own on public.assets for select using (auth.uid() = user_id);
 create policy assets_insert_own on public.assets for insert with check (auth.uid() = user_id);
 create policy assets_delete_own on public.assets for delete using (auth.uid() = user_id);
 
 create policy usage_select_own on public.usage_ledger for select using (auth.uid() = user_id);
+
+grant insert on table public.jobs to authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('project-assets', 'project-assets', false)
