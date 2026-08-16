@@ -445,6 +445,8 @@ Initial configurable defaults:
 
 Enforce limits in FastAPI, not only in the UI. Reserve characters transactionally when accepting a project, consume them on success, and refund them on an attributable internal failure. Add rate limiting to signup-sensitive and generation endpoints. CAPTCHA is deferred until abuse appears but must be easy to enable.
 
+Public signup remains disabled in local development, preview environments, and any deployment that has not yet published the required privacy, retention, deletion, terms, and acceptable-use policies. Enabling it is a release gate, not a side effect of wiring Supabase Auth.
+
 ## 12. Security, privacy, and reliability
 
 - Verify JWT issuer, audience, signature, and expiry in FastAPI.
