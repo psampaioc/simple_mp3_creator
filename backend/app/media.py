@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import io
 import re
+import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -14,6 +16,7 @@ from PIL import Image, ImageOps
 
 def normalize_text(text: str) -> str:
     """Normalize line endings and whitespace without changing word order."""
+    text = unicodedata.normalize("NFC", text)
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     paragraphs = [" ".join(paragraph.split()) for paragraph in re.split(r"\n\s*\n", text)]
     return "\n\n".join(paragraph for paragraph in paragraphs if paragraph)
@@ -61,13 +64,22 @@ class TTSProvider(Protocol):
 
 @dataclass(frozen=True)
 class FakeTTSProvider:
-    """Write a stable local placeholder for deterministic tests."""
+    """Generate a short valid silent MP3 without network access."""
 
-    marker: bytes = b"SIMPLE-MP3-CREATOR-FAKE-AUDIO\n"
+    duration_seconds: float = 0.5
 
     async def synthesize(self, text: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(self.marker + normalize_text(text).encode("utf-8"))
+        del text  # The fake provider models successful synthesis, not speech quality.
+        subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                "-i", "anullsrc=r=44100:cl=mono", "-t", str(self.duration_seconds),
+                "-c:a", "libmp3lame", "-b:a", "192k", "-y", str(output_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
 
 
 @dataclass(frozen=True)
@@ -85,12 +97,29 @@ def synthesize_sync(provider: TTSProvider, text: str, output_path: Path) -> None
     asyncio.run(provider.synthesize(text, output_path))
 
 
-def normalize_cover_art(source: bytes, size: tuple[int, int] = (1400, 1400)) -> bytes:
-    """Center-crop artwork to a square JPEG with a stable RGB color mode."""
+def normalize_cover_art(
+    source: bytes,
+    *,
+    max_size: int = 1_600,
+    square_crop: bool = False,
+    max_input_bytes: int = 5 * 1024 * 1024,
+) -> bytes:
+    """Validate and normalize JPEG/PNG artwork for ID3 embedding."""
+    if len(source) > max_input_bytes:
+        raise ValueError("cover art exceeds the 5 MB limit")
     with Image.open(io.BytesIO(source)) as image:
-        image = ImageOps.fit(image.convert("RGB"), size, method=Image.Resampling.LANCZOS)
+        if image.format not in {"JPEG", "PNG"}:
+            raise ValueError("cover art must be JPEG or PNG")
+        if getattr(image, "n_frames", 1) > 1:
+            raise ValueError("animated cover art is not supported")
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        if square_crop:
+            side = min(max_size, image.width, image.height)
+            image = ImageOps.fit(image, (side, side), method=Image.Resampling.LANCZOS)
+        else:
+            image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         output = io.BytesIO()
-        image.save(output, format="JPEG", quality=90, optimize=False, progressive=False)
+        image.save(output, format="JPEG", quality=85, optimize=False, progressive=False)
         return output.getvalue()
 
 
@@ -101,9 +130,11 @@ def add_metadata(
     artist: str,
     album: str,
     cover_art: bytes | None = None,
+    year: int | None = None,
+    comment: str | None = None,
 ) -> None:
     """Write ID3 metadata and optional attached picture without changing audio."""
-    from mutagen.id3 import APIC, ID3, ID3NoHeaderError, TALB, TIT2, TPE1
+    from mutagen.id3 import APIC, COMM, ID3, ID3NoHeaderError, TALB, TDRC, TIT2, TPE1
 
     try:
         tags = ID3(str(mp3_path))
@@ -112,9 +143,15 @@ def add_metadata(
     tags.delall("TIT2")
     tags.delall("TPE1")
     tags.delall("TALB")
+    tags.delall("TDRC")
+    tags.delall("COMM")
     tags.add(TIT2(encoding=3, text=title))
     tags.add(TPE1(encoding=3, text=artist))
     tags.add(TALB(encoding=3, text=album))
+    if year is not None:
+        tags.add(TDRC(encoding=3, text=str(year)))
+    if comment:
+        tags.add(COMM(encoding=3, lang="eng", desc="", text=comment))
     if cover_art is not None:
         tags.delall("APIC:")
         tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover_art))
