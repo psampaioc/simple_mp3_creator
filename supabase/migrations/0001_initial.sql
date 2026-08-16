@@ -109,6 +109,15 @@ alter table public.jobs enable row level security;
 alter table public.assets enable row level security;
 alter table public.usage_ledger enable row level security;
 
+-- Keep Data API exposure explicit when default privileges are disabled.
+grant usage on schema public to authenticated, service_role;
+grant select, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.projects to authenticated;
+grant select on public.jobs to authenticated;
+grant select, insert, delete on public.assets to authenticated;
+grant select on public.usage_ledger to authenticated;
+grant all on public.profiles, public.projects, public.jobs, public.assets, public.usage_ledger to service_role;
+
 create policy profiles_select_own on public.profiles for select using (auth.uid() = id);
 create policy profiles_update_own on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
