@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.media import FakeTTSProvider, add_metadata, chunk_text, synthesize_sync
+from mutagen.mp3 import MP3
 
 
 def utc_now() -> str:
@@ -30,6 +31,9 @@ class Project:
     stage: str
     output_path: str | None
     error_code: str | None
+    duration_ms: int | None
+    output_size_bytes: int | None
+    output_bitrate: int | None
 
 
 class LocalStore:
@@ -69,6 +73,9 @@ class LocalStore:
                     stage TEXT NOT NULL,
                     output_path TEXT,
                     error_code TEXT,
+                    duration_ms INTEGER,
+                    output_size_bytes INTEGER,
+                    output_bitrate INTEGER,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -97,7 +104,7 @@ class LocalStore:
         now = utc_now()
         with self._connect() as connection:
             connection.execute(
-                "INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, 'queued', 'queued', NULL, NULL, ?, ?)",
+                "INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, 'queued', 'queued', NULL, NULL, NULL, NULL, NULL, ?, ?)",
                 (project_id, title, source_text, voice_id, speech_rate, author, now, now),
             )
             connection.execute(
@@ -129,9 +136,13 @@ class LocalStore:
                 (project_id,),
             )
 
-    def mark_ready(self, project_id: str, output_path: Path) -> None:
+    def mark_ready(self, project_id: str, output_path: Path, duration_ms: int, bitrate: int) -> None:
         self._update(project_id, "ready", "ready", str(output_path))
         with self._connect() as connection:
+            connection.execute(
+                "UPDATE projects SET duration_ms = ?, output_size_bytes = ?, output_bitrate = ? WHERE id = ?",
+                (duration_ms, output_path.stat().st_size, bitrate, project_id),
+            )
             connection.execute(
                 "UPDATE jobs SET status = 'ready', finished_at = ? WHERE project_id = ?",
                 (utc_now(), project_id),
@@ -188,7 +199,8 @@ def generate_audio(project_id: str, store: LocalStore) -> Project:
                     capture_output=True,
                 )
         add_metadata(output_path, title=project.title, artist=project.author or project.voice_id, album="Simple MP3 Creator")
-        store.mark_ready(project_id, output_path)
+        audio = MP3(str(output_path))
+        store.mark_ready(project_id, output_path, round(audio.info.length * 1000), audio.info.bitrate)
     except Exception:
         store.mark_failed(project_id, "GENERATION_FAILED")
         raise

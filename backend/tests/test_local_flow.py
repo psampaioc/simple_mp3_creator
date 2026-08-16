@@ -19,6 +19,9 @@ def test_local_project_is_created_and_generated(tmp_path: Path) -> None:
     assert ready.status == "ready"
     assert ready.output_path is not None
     assert MP3(ready.output_path).info.length > 0
+    assert ready.duration_ms is not None and ready.duration_ms > 0
+    assert ready.output_size_bytes is not None and ready.output_size_bytes > 0
+    assert ready.output_bitrate is not None and ready.output_bitrate > 0
     assert list((tmp_path / "storage").glob("*.mp3"))
 
 
