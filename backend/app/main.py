@@ -46,7 +46,11 @@ def local_store() -> LocalStore:
 def managed_api():
     from app.supabase_api import SupabaseAPI
 
-    return SupabaseAPI(settings.supabase_url, settings.supabase_publishable_key)
+    return SupabaseAPI(
+        settings.supabase_url,
+        settings.supabase_publishable_key,
+        service_role_key=settings.supabase_service_role_key,
+    )
 
 
 def managed_project_json(project: dict[str, object | None]) -> dict[str, object | None]:

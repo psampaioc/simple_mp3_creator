@@ -16,11 +16,13 @@ class SupabaseAPIError(RuntimeError):
 
 
 class SupabaseAPI:
-    def __init__(self, project_url: str, publishable_key: str, transport: httpx.BaseTransport | None = None) -> None:
+    def __init__(self, project_url: str, publishable_key: str, transport: httpx.BaseTransport | None = None, service_role_key: str = "") -> None:
         if not project_url or not publishable_key:
             raise ValueError("Supabase URL and publishable key are required")
         self.base_url = f"{project_url.rstrip('/')}/rest/v1"
+        self.storage_url = f"{project_url.rstrip('/')}/storage/v1"
         self.publishable_key = publishable_key
+        self.service_role_key = service_role_key
         self.transport = transport
 
     def _headers(self, access_token: str) -> dict[str, str]:
@@ -29,6 +31,11 @@ class SupabaseAPI:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         }
+
+    def _service_headers(self) -> dict[str, str]:
+        if not self.service_role_key:
+            raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for worker operations")
+        return {"apikey": self.service_role_key, "Authorization": f"Bearer {self.service_role_key}"}
 
     def _request(self, method: str, path: str, access_token: str, **kwargs: Any) -> httpx.Response:
         request_headers = self._headers(access_token)
@@ -90,3 +97,24 @@ class SupabaseAPI:
         if not isinstance(rows, list):
             raise SupabaseAPIError("Supabase returned an unexpected project response")
         return rows[0] if rows else None
+
+    def update_project_service(self, project_id: str, values: dict[str, Any]) -> None:
+        with httpx.Client(transport=self.transport, timeout=10.0) as client:
+            response = client.patch(
+                f"{self.base_url}/projects",
+                headers={**self._service_headers(), "Content-Type": "application/json"},
+                params={"id": f"eq.{project_id}"},
+                json=values,
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase project update returned HTTP {response.status_code}")
+
+    def upload_asset_service(self, storage_path: str, content: bytes, content_type: str = "audio/mpeg") -> None:
+        with httpx.Client(transport=self.transport, timeout=30.0) as client:
+            response = client.post(
+                f"{self.storage_url}/object/project-assets/{storage_path}",
+                headers={**self._service_headers(), "Content-Type": content_type, "x-upsert": "true"},
+                content=content,
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase asset upload returned HTTP {response.status_code}")
