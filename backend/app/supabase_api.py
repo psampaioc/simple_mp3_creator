@@ -16,13 +16,13 @@ class SupabaseAPIError(RuntimeError):
 
 
 class SupabaseAPI:
-    def __init__(self, project_url: str, publishable_key: str, transport: httpx.BaseTransport | None = None, service_role_key: str = "") -> None:
+    def __init__(self, project_url: str, publishable_key: str, transport: httpx.BaseTransport | None = None, secret_key: str = "", service_role_key: str = "") -> None:
         if not project_url or not publishable_key:
             raise ValueError("Supabase URL and publishable key are required")
         self.base_url = f"{project_url.rstrip('/')}/rest/v1"
         self.storage_url = f"{project_url.rstrip('/')}/storage/v1"
         self.publishable_key = publishable_key
-        self.service_role_key = service_role_key
+        self.secret_key = secret_key or service_role_key
         self.transport = transport
 
     def _headers(self, access_token: str) -> dict[str, str]:
@@ -33,9 +33,9 @@ class SupabaseAPI:
         }
 
     def _service_headers(self) -> dict[str, str]:
-        if not self.service_role_key:
-            raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for worker operations")
-        return {"apikey": self.service_role_key, "Authorization": f"Bearer {self.service_role_key}"}
+        if not self.secret_key:
+            raise ValueError("SUPABASE_SECRET_KEY is required for cleanup operations")
+        return {"apikey": self.secret_key, "Authorization": f"Bearer {self.secret_key}"}
 
     def _request(self, method: str, path: str, access_token: str, **kwargs: Any) -> httpx.Response:
         request_headers = self._headers(access_token)
