@@ -107,7 +107,7 @@ export default function HomePage() {
         </form>
         <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio controls src={downloadUrl} /><a className="download-link" href={downloadUrl}>Download MP3 ↗</a></> : <p className="stage">Preparing a private download link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
       </section>
-      <footer><span>Private by design.</span><span>Local preview · fake TTS · MP3 output</span></footer>
+      <footer><span>Private by design.</span><span>Managed preview · private MP3 output</span></footer>
     </main>
   );
 }

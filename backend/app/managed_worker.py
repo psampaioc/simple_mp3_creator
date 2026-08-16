@@ -9,7 +9,8 @@ from typing import Protocol
 
 from mutagen.mp3 import MP3
 
-from app.media import FakeTTSProvider, add_metadata, chunk_text, synthesize_sync
+from app.media import EdgeTTSProvider, FakeTTSProvider, add_metadata, chunk_text, normalize_text, synthesize_sync
+from app.settings import settings
 
 
 class ManagedMediaAPI(Protocol):
@@ -28,20 +29,24 @@ def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI, acc
         api.update_project(access_token, project_id, {"status": "generating"})
         with tempfile.TemporaryDirectory(prefix=f"managed-{project_id}-") as temp:
             root = Path(temp)
-            parts: list[Path] = []
-            for index, text in enumerate(chunk_text(str(project["source_text"]))):
-                part = root / f"part-{index:04d}.mp3"
-                synthesize_sync(FakeTTSProvider(), text, part)
-                parts.append(part)
-            if not parts:
-                raise ValueError("empty text")
             output = root / "output.mp3"
-            if len(parts) == 1:
-                parts[0].replace(output)
+            source_text = normalize_text(str(project["source_text"]))
+            if not source_text:
+                raise ValueError("empty text")
+            if settings.tts_provider == "edge-tts":
+                synthesize_sync(EdgeTTSProvider(str(project["voice_id"])), source_text, output)
             else:
-                manifest = root / "parts.txt"
-                manifest.write_text("\n".join(f"file '{part}'" for part in parts), encoding="utf-8")
-                subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", "-y", str(output)], check=True, capture_output=True)
+                parts: list[Path] = []
+                for index, text in enumerate(chunk_text(source_text)):
+                    part = root / f"part-{index:04d}.mp3"
+                    synthesize_sync(FakeTTSProvider(), text, part)
+                    parts.append(part)
+                if len(parts) == 1:
+                    parts[0].replace(output)
+                else:
+                    manifest = root / "parts.txt"
+                    manifest.write_text("\n".join(f"file '{part}'" for part in parts), encoding="utf-8")
+                    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", "-y", str(output)], check=True, capture_output=True)
             add_metadata(output, title=str(project["title"]), artist=str(project.get("author") or project["voice_id"]), album="Simple MP3 Creator")
             audio = MP3(str(output))
             content = output.read_bytes()
