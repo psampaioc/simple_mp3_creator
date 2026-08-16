@@ -118,3 +118,17 @@ class SupabaseAPI:
             )
         if response.is_error:
             raise SupabaseAPIError(f"Supabase asset upload returned HTTP {response.status_code}")
+
+    def create_asset_service(self, asset: dict[str, Any]) -> dict[str, Any]:
+        with httpx.Client(transport=self.transport, timeout=10.0) as client:
+            response = client.post(
+                f"{self.base_url}/assets",
+                headers={**self._service_headers(), "Content-Type": "application/json", "Prefer": "return=representation"},
+                json=asset,
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase asset record returned HTTP {response.status_code}")
+        rows = response.json()
+        if not isinstance(rows, list) or len(rows) != 1:
+            raise SupabaseAPIError("Supabase returned an unexpected asset response")
+        return rows[0]
