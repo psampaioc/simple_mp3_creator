@@ -33,6 +33,9 @@ create table if not exists public.projects (
   deleted_at timestamptz
 );
 
+alter table public.projects
+  add column if not exists expires_at timestamptz not null default timezone('utc', now()) + interval '24 hours';
+
 create table if not exists public.jobs (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null unique references public.projects(id) on delete cascade,
@@ -63,6 +66,12 @@ create table if not exists public.assets (
   created_at timestamptz not null default timezone('utc', now()),
   expires_at timestamptz
 );
+
+alter table public.assets
+  alter column expires_at set default timezone('utc', now()) + interval '24 hours';
+
+create index if not exists projects_expiry_idx on public.projects(expires_at);
+create index if not exists assets_expiry_idx on public.assets(expires_at);
 
 alter table public.projects
   add constraint projects_cover_asset_fk

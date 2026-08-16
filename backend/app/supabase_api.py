@@ -65,7 +65,7 @@ class SupabaseAPI:
             "GET",
             "projects",
             access_token,
-            params={"select": "*", "order": "created_at.desc"},
+            params={"select": "*", "expires_at": "gt.now()", "order": "created_at.desc"},
         )
         rows = response.json()
         if not isinstance(rows, list):
@@ -91,7 +91,7 @@ class SupabaseAPI:
             "GET",
             "projects",
             access_token,
-            params={"select": "*", "id": f"eq.{project_id}", "limit": "1"},
+            params={"select": "*", "id": f"eq.{project_id}", "expires_at": "gt.now()", "limit": "1"},
         )
         rows = response.json()
         if not isinstance(rows, list):
@@ -158,7 +158,7 @@ class SupabaseAPI:
             "GET",
             "assets",
             access_token,
-            params={"select": "*", "project_id": f"eq.{project_id}", "kind": "eq.mp3", "order": "created_at.desc", "limit": "1"},
+            params={"select": "*", "project_id": f"eq.{project_id}", "kind": "eq.mp3", "expires_at": "gt.now()", "order": "created_at.desc", "limit": "1"},
         )
         rows = response.json()
         if not isinstance(rows, list):
