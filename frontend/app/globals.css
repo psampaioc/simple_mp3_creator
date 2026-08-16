@@ -1,0 +1,12 @@
+:root { color-scheme: dark; --ink: #f5f1e8; --muted: #aaa69d; --accent: #e2a85b; --surface: #1b1d1d; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #101212; color: var(--ink); font-family: Georgia, serif; }
+.shell { min-height: 100vh; max-width: 900px; margin: auto; padding: 12vh 8vw; }
+.eyebrow { color: var(--accent); font: 700 0.75rem/1.2 system-ui, sans-serif; letter-spacing: .2em; }
+h1 { max-width: 680px; margin: 1.5rem 0; font-size: clamp(3.5rem, 10vw, 7rem); line-height: .9; font-weight: 400; }
+.lede { max-width: 520px; color: var(--muted); font-size: 1.25rem; line-height: 1.6; }
+.button { display: inline-block; margin: 2rem 0 8rem; padding: 1rem 1.3rem; border-radius: 999px; background: var(--accent); color: #191510; font: 700 0.9rem system-ui, sans-serif; text-decoration: none; }
+.card { max-width: 560px; padding: 2rem; border: 1px solid #353937; background: var(--surface); }
+.card h2 { margin-top: 0; font-size: 1.8rem; font-weight: 400; }
+.card p { color: var(--muted); font: 1rem/1.6 system-ui, sans-serif; }
+

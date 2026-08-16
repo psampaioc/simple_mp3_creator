@@ -1,0 +1,41 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "leitor.py",
+      "file_type": "code",
+      "source_file": "leitor.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "leitor",
+      "community": 0,
+      "norm_label": "leitor.py"
+    },
+    {
+      "label": "principal()",
+      "file_type": "code",
+      "source_file": "leitor.py",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "leitor_principal",
+      "community": 0,
+      "norm_label": "principal()"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "leitor.py",
+      "source_location": "L5",
+      "weight": 1.0,
+      "source": "leitor",
+      "target": "leitor_principal",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "14e20688dfa8d826224db9ddd2dd641d87e684f0"
+}
