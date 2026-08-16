@@ -66,7 +66,7 @@ def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
 
 
-@app.post("/v1/internal/cleanup")
+@app.get("/v1/internal/cleanup")
 def cleanup_expired(authorization: str | None = Header(default=None)) -> dict[str, int]:
     if not settings.cron_secret or not authorization or not secrets.compare_digest(authorization, f"Bearer {settings.cron_secret}"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid cleanup credentials")

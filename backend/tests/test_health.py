@@ -16,6 +16,11 @@ def test_authenticated_identity_requires_bearer_token() -> None:
     assert response.status_code == 401
 
 
+def test_cleanup_requires_cron_secret() -> None:
+    response = TestClient(app).get("/v1/internal/cleanup")
+    assert response.status_code == 401
+
+
 def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
     class FakeManagedAPI:
         def create_project(self, token, project):
