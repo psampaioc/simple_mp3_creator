@@ -8,8 +8,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser, current_user, optional_current_user
+from app.github_actions import dispatch_media_worker
 from app.local_flow import LocalStore, generate_audio, project_json
-from app.managed_worker import generate_managed_audio
 from app.media import normalize_text
 from app.settings import settings
 
@@ -128,7 +128,10 @@ def create_project(
             user.access_token,
             {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
         )
-        background_tasks.add_task(generate_managed_audio, project, managed_api(), user.access_token)
+        try:
+            dispatch_media_worker()
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail="media worker is not configured") from error
         return managed_project_json(project)
     project = local_store().create_project(
         title=payload.title.strip(),

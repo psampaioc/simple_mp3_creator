@@ -10,6 +10,20 @@ services:
     volumes:
       - ./data:/app/data
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    environment:
+      DATA_BACKEND: supabase
+      TTS_PROVIDER: piper
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      PIPER_MODEL_PATH: /app/models/en_US-amy-low.onnx
+    volumes:
+      - ./backend/models:/app/models:ro
+
   frontend:
     image: node:20-alpine
     working_dir: /app
@@ -26,4 +40,3 @@ services:
 
 volumes:
   frontend_node_modules:
-

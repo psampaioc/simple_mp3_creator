@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/local.db"
     storage_dir: str = "./data/storage"
     tts_provider: str = "fake"
+    piper_model_path: str = "./models/en_US-amy-low.onnx"
+    worker_poll_seconds: float = 2.0
+    worker_id: str = "simple-mp3-worker"
+    worker_once: bool = False
+    github_actions_token: str = ""
+    github_repository: str = "psampaioc/simple_mp3_creator"
+    github_worker_workflow: str = "media-worker.yml"
     edge_tts_voice: str = "en-US-AriaNeural"
     cors_origins: str = "http://localhost:3000"
     supabase_url: str = ""

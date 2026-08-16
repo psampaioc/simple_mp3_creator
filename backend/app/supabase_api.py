@@ -86,6 +86,21 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase returned an unexpected job response")
         return rows[0]
 
+    def claim_next_job_service(self, worker_id: str) -> dict[str, Any] | None:
+        response = self._service_request("POST", "rpc/claim_next_job", json={"p_worker_id": worker_id})
+        payload = response.json()
+        return payload if isinstance(payload, dict) and payload else None
+
+    def update_job_service(self, job_id: str, values: dict[str, Any]) -> None:
+        self._service_request("PATCH", "jobs", params={"id": f"eq.{job_id}"}, json=values)
+
+    def get_project_service(self, project_id: str) -> dict[str, Any] | None:
+        response = self._service_request("GET", "projects", params={"select": "*", "id": f"eq.{project_id}", "limit": "1"})
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected project response")
+        return rows[0] if rows else None
+
     def get_project(self, access_token: str, project_id: str) -> dict[str, Any] | None:
         response = self._request(
             "GET",
