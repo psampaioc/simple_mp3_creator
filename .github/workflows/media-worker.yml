@@ -2,6 +2,11 @@ name: Media worker
 
 on:
   workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Supabase job UUID to process"
+        required: true
+        type: string
 
 concurrency:
   group: simple-mp3-media-worker
@@ -18,6 +23,7 @@ jobs:
       DATA_BACKEND: supabase
       TTS_PROVIDER: piper
       WORKER_ONCE: "true"
+      WORKER_JOB_ID: ${{ inputs.job_id }}
       PIPER_MODEL_PATH: ${{ github.workspace }}/backend/models/en_US-amy-low.onnx
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}

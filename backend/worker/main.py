@@ -19,7 +19,7 @@ def build_api() -> SupabaseAPI:
 
 
 def process_one(api: SupabaseAPI, worker_id: str) -> bool:
-    job = api.claim_next_job_service(worker_id)
+    job = api.claim_next_job_service(worker_id, settings.worker_job_id)
     if job is None:
         return False
     project = job.pop("project", None)

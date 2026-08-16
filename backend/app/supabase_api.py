@@ -86,8 +86,9 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase returned an unexpected job response")
         return rows[0]
 
-    def claim_next_job_service(self, worker_id: str) -> dict[str, Any] | None:
-        response = self._service_request("POST", "rpc/claim_next_job", json={"p_worker_id": worker_id})
+    def claim_next_job_service(self, worker_id: str, job_id: str = "") -> dict[str, Any] | None:
+        payload: dict[str, Any] = {"p_worker_id": worker_id, "p_job_id": job_id or None}
+        response = self._service_request("POST", "rpc/claim_next_job", json=payload)
         payload = response.json()
         return payload if isinstance(payload, dict) and payload else None
 
