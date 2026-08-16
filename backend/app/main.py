@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, status
+import secrets
+
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -61,6 +63,23 @@ def managed_project_json(project: dict[str, object | None]) -> dict[str, object 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
+
+
+@app.post("/v1/internal/cleanup")
+def cleanup_expired(authorization: str | None = Header(default=None)) -> dict[str, int]:
+    if not settings.cron_secret or not authorization or not secrets.compare_digest(authorization, f"Bearer {settings.cron_secret}"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid cleanup credentials")
+    if settings.data_backend != "supabase":
+        return {"assets": 0, "projects": 0}
+    api = managed_api()
+    assets = api.list_expired_assets_service()
+    for asset in assets:
+        api.delete_storage_object_service(str(asset["storage_path"]))
+        api.delete_asset_service(str(asset["id"]))
+    projects = api.list_expired_projects_service()
+    for project in projects:
+        api.delete_project_service(str(project["id"]))
+    return {"assets": len(assets), "projects": len(projects)}
 
 
 @app.get("/v1/voices")

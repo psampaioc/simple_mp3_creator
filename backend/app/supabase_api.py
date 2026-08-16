@@ -178,3 +178,40 @@ class SupabaseAPI:
         if not isinstance(signed_url, str) or not signed_url:
             raise SupabaseAPIError("Supabase returned an unexpected signed URL response")
         return f"{self.storage_url}{signed_url}" if signed_url.startswith("/") else signed_url
+
+    def list_expired_assets_service(self) -> list[dict[str, Any]]:
+        response = self._service_request("GET", "assets", params={"select": "id,project_id,storage_path", "expires_at": "lt.now()", "limit": "1000"})
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected expired asset response")
+        return rows
+
+    def list_expired_projects_service(self) -> list[dict[str, Any]]:
+        response = self._service_request("GET", "projects", params={"select": "id", "expires_at": "lt.now()", "limit": "1000"})
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected expired project response")
+        return rows
+
+    def _service_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        headers = {**self._service_headers(), "Content-Type": "application/json"}
+        with httpx.Client(transport=self.transport, timeout=30.0) as client:
+            response = client.request(method, f"{self.base_url}/{path}", headers=headers, **kwargs)
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase service request returned HTTP {response.status_code}")
+        return response
+
+    def delete_asset_service(self, asset_id: str) -> None:
+        self._service_request("DELETE", "assets", params={"id": f"eq.{asset_id}"})
+
+    def delete_project_service(self, project_id: str) -> None:
+        self._service_request("DELETE", "projects", params={"id": f"eq.{project_id}"})
+
+    def delete_storage_object_service(self, storage_path: str) -> None:
+        with httpx.Client(transport=self.transport, timeout=30.0) as client:
+            response = client.delete(
+                f"{self.storage_url}/object/project-assets/{storage_path}",
+                headers=self._service_headers(),
+            )
+        if response.is_error and response.status_code != 404:
+            raise SupabaseAPIError(f"Supabase storage delete returned HTTP {response.status_code}")
