@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Protocol
 
 from mutagen.mp3 import MP3
 
-from app.media import EdgeTTSProvider, FakeTTSProvider, add_metadata, chunk_text, normalize_text, synthesize_sync
+from app.media import EdgeTTSProvider, FakeTTSProvider, add_metadata, normalize_text, synthesize_sync
 from app.settings import settings
 
 
@@ -36,17 +35,7 @@ def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI, acc
             if settings.tts_provider == "edge-tts":
                 synthesize_sync(EdgeTTSProvider(str(project["voice_id"])), source_text, output)
             else:
-                parts: list[Path] = []
-                for index, text in enumerate(chunk_text(source_text)):
-                    part = root / f"part-{index:04d}.mp3"
-                    synthesize_sync(FakeTTSProvider(), text, part)
-                    parts.append(part)
-                if len(parts) == 1:
-                    parts[0].replace(output)
-                else:
-                    manifest = root / "parts.txt"
-                    manifest.write_text("\n".join(f"file '{part}'" for part in parts), encoding="utf-8")
-                    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", "-y", str(output)], check=True, capture_output=True)
+                synthesize_sync(FakeTTSProvider(), source_text, output)
             add_metadata(output, title=str(project["title"]), artist=str(project.get("author") or project["voice_id"]), album="Simple MP3 Creator")
             audio = MP3(str(output))
             content = output.read_bytes()
