@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.local_flow import LocalStore, generate_audio, project_json
@@ -8,6 +10,13 @@ from app.media import normalize_text
 from app.settings import settings
 
 app = FastAPI(title="Simple MP3 Creator API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
+)
 
 
 class ProjectCreate(BaseModel):
@@ -16,6 +25,13 @@ class ProjectCreate(BaseModel):
     voice_id: str = Field(min_length=1, max_length=120)
     speech_rate: str = Field(default="normal", pattern="^(slow|normal|fast)$")
     author: str | None = Field(default=None, max_length=200)
+    output_format: str = Field(default="mp3", pattern="^mp3$")
+
+
+VOICE_CATALOG = [
+    {"id": "en-US-AriaNeural", "locale": "en-US", "label": "Aria · English (US)"},
+    {"id": "pt-BR-FranciscaNeural", "locale": "pt-BR", "label": "Francisca · Português (Brasil)"},
+]
 
 
 def local_store() -> LocalStore:
@@ -29,6 +45,13 @@ def local_store() -> LocalStore:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
+
+
+@app.get("/v1/voices")
+def list_voices(locale: str | None = Query(default=None, max_length=16)) -> list[dict[str, str]]:
+    if locale is None:
+        return VOICE_CATALOG
+    return [voice for voice in VOICE_CATALOG if voice["locale"] == locale]
 
 
 @app.post("/v1/projects", status_code=status.HTTP_202_ACCEPTED)
@@ -84,3 +107,15 @@ def delete_project(project_id: str) -> None:
     store.delete_project(project_id)
     if project.output_path:
         Path(project.output_path).unlink(missing_ok=True)
+
+
+@app.get("/v1/projects/{project_id}/download")
+def download_project(project_id: str) -> FileResponse:
+    try:
+        project = local_store().get_project(project_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="project not found") from error
+    if project.status != "ready" or not project.output_path or not Path(project.output_path).is_file():
+        raise HTTPException(status_code=409, detail="project audio is not ready")
+    filename = "".join(character if character.isalnum() or character in "-_ " else "_" for character in project.title).strip() or "audio"
+    return FileResponse(project.output_path, media_type="audio/mpeg", filename=f"{filename}.mp3")

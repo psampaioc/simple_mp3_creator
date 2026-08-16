@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     storage_dir: str = "./data/storage"
     tts_provider: str = "fake"
     edge_tts_voice: str = "en-US-AriaNeural"
+    cors_origins: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -19,4 +20,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
