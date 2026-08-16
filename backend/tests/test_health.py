@@ -31,7 +31,7 @@ def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
         def create_job(self, token, job):
             assert token == "test-token"
             assert job["user_id"] == "user-1"
-            return job
+            return {"id": "job-1", **job}
 
         def update_project(self, token, project_id, values):
             return None
