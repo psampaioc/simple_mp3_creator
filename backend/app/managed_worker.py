@@ -13,16 +13,19 @@ from app.media import FakeTTSProvider, add_metadata, chunk_text, synthesize_sync
 
 
 class ManagedMediaAPI(Protocol):
+    def update_project(self, access_token: str, project_id: str, values: dict[str, object]) -> None: ...
+    def upload_asset(self, access_token: str, storage_path: str, content: bytes, content_type: str = "audio/mpeg") -> None: ...
+    def create_asset(self, access_token: str, asset: dict[str, object]) -> dict[str, object]: ...
     def upload_asset_service(self, storage_path: str, content: bytes, content_type: str = "audio/mpeg") -> None: ...
     def create_asset_service(self, asset: dict[str, object]) -> dict[str, object]: ...
     def update_project_service(self, project_id: str, values: dict[str, object]) -> None: ...
 
 
-def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI) -> None:
+def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI, access_token: str) -> None:
     project_id = str(project["id"])
     user_id = str(project["user_id"])
     try:
-        api.update_project_service(project_id, {"status": "generating"})
+        api.update_project(access_token, project_id, {"status": "generating"})
         with tempfile.TemporaryDirectory(prefix=f"managed-{project_id}-") as temp:
             root = Path(temp)
             parts: list[Path] = []
@@ -43,10 +46,10 @@ def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI) -> 
             audio = MP3(str(output))
             content = output.read_bytes()
             path = f"{user_id}/{project_id}.mp3"
-            api.upload_asset_service(path, content)
-            asset = api.create_asset_service({"project_id": project_id, "user_id": user_id, "kind": "mp3", "storage_path": path, "content_type": "audio/mpeg", "size_bytes": len(content)})
-            api.update_project_service(project_id, {"status": "ready", "duration_ms": round(audio.info.length * 1000), "output_size_bytes": len(content), "output_bitrate": audio.info.bitrate, "cover_asset_id": None})
+            api.upload_asset(access_token, path, content)
+            asset = api.create_asset(access_token, {"project_id": project_id, "user_id": user_id, "kind": "mp3", "storage_path": path, "content_type": "audio/mpeg", "size_bytes": len(content)})
+            api.update_project(access_token, project_id, {"status": "ready", "duration_ms": round(audio.info.length * 1000), "output_size_bytes": len(content), "output_bitrate": audio.info.bitrate, "cover_asset_id": None})
             del asset
     except Exception:
-        api.update_project_service(project_id, {"status": "failed"})
+        api.update_project(access_token, project_id, {"status": "failed"})
         raise

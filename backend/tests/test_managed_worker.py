@@ -7,13 +7,13 @@ class FakeAPI:
         self.uploads: list[tuple[str, bytes]] = []
         self.assets: list[dict[str, object]] = []
 
-    def update_project_service(self, project_id, values):
+    def update_project(self, token, project_id, values):
         self.updates.append({"id": project_id, **values})
 
-    def upload_asset_service(self, storage_path, content, content_type="audio/mpeg"):
+    def upload_asset(self, token, storage_path, content, content_type="audio/mpeg"):
         self.uploads.append((storage_path, content))
 
-    def create_asset_service(self, asset):
+    def create_asset(self, token, asset):
         self.assets.append(asset)
         return {"id": "asset-1", **asset}
 
@@ -22,7 +22,7 @@ def test_managed_worker_generates_and_uploads_private_mp3() -> None:
     api = FakeAPI()
     generate_managed_audio(
         {"id": "project-1", "user_id": "user-1", "title": "Demo", "source_text": "Hello.", "voice_id": "voice"},
-        api,
+        api, "user-token",
     )
 
     assert api.uploads[0][0] == "user-1/project-1.mp3"

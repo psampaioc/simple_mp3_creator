@@ -108,8 +108,7 @@ def create_project(
             user.access_token,
             {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
         )
-        if settings.supabase_service_role_key:
-            background_tasks.add_task(generate_managed_audio, project, managed_api())
+        background_tasks.add_task(generate_managed_audio, project, managed_api(), user.access_token)
         return managed_project_json(project)
     project = local_store().create_project(
         title=payload.title.strip(),

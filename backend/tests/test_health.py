@@ -28,6 +28,15 @@ def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
             assert job["user_id"] == "user-1"
             return job
 
+        def update_project(self, token, project_id, values):
+            return None
+
+        def upload_asset(self, token, storage_path, content, content_type="audio/mpeg"):
+            return None
+
+        def create_asset(self, token, asset):
+            return asset
+
     import app.main as main_module
 
     monkeypatch.setattr(main_module.settings, "data_backend", "supabase")

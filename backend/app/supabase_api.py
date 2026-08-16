@@ -98,6 +98,19 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase returned an unexpected project response")
         return rows[0] if rows else None
 
+    def update_project(self, access_token: str, project_id: str, values: dict[str, Any]) -> None:
+        self._request("PATCH", "projects", access_token, params={"id": f"eq.{project_id}"}, json=values)
+
+    def upload_asset(self, access_token: str, storage_path: str, content: bytes, content_type: str = "audio/mpeg") -> None:
+        with httpx.Client(transport=self.transport, timeout=30.0) as client:
+            response = client.post(
+                f"{self.storage_url}/object/project-assets/{storage_path}",
+                headers={**self._headers(access_token), "x-upsert": "true"},
+                content=content,
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase asset upload returned HTTP {response.status_code}")
+
     def update_project_service(self, project_id: str, values: dict[str, Any]) -> None:
         with httpx.Client(transport=self.transport, timeout=10.0) as client:
             response = client.patch(
@@ -128,6 +141,13 @@ class SupabaseAPI:
             )
         if response.is_error:
             raise SupabaseAPIError(f"Supabase asset record returned HTTP {response.status_code}")
+        rows = response.json()
+        if not isinstance(rows, list) or len(rows) != 1:
+            raise SupabaseAPIError("Supabase returned an unexpected asset response")
+        return rows[0]
+
+    def create_asset(self, access_token: str, asset: dict[str, Any]) -> dict[str, Any]:
+        response = self._request("POST", "assets", access_token, params={"select": "*"}, headers={"Prefer": "return=representation"}, json=asset)
         rows = response.json()
         if not isinstance(rows, list) or len(rows) != 1:
             raise SupabaseAPIError("Supabase returned an unexpected asset response")
