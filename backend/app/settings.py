@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 2.0
     worker_id: str = "simple-mp3-worker"
     worker_once: bool = False
+    worker_job_id: str = ""
     github_actions_token: str = ""
     github_repository: str = "psampaioc/simple_mp3_creator"
     github_worker_workflow: str = "media-worker.yml"

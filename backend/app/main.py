@@ -124,12 +124,12 @@ def create_project(
                 "status": "queued",
             },
         )
-        managed_api().create_job(
+        job = managed_api().create_job(
             user.access_token,
             {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
         )
         try:
-            dispatch_media_worker()
+            dispatch_media_worker(str(job["id"]))
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail="media worker is not configured") from error
         return managed_project_json(project)

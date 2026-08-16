@@ -7,7 +7,7 @@ import httpx
 from app.settings import settings
 
 
-def dispatch_media_worker() -> None:
+def dispatch_media_worker(job_id: str) -> None:
     if not settings.github_actions_token:
         raise RuntimeError("GITHUB_ACTIONS_TOKEN is required for managed worker dispatch")
     url = f"https://api.github.com/repos/{settings.github_repository}/actions/workflows/{settings.github_worker_workflow}/dispatches"
@@ -18,7 +18,7 @@ def dispatch_media_worker() -> None:
             "Authorization": f"Bearer {settings.github_actions_token}",
             "X-GitHub-Api-Version": "2022-11-28",
         },
-        json={"ref": "main"},
+        json={"ref": "main", "inputs": {"job_id": job_id}},
         timeout=10.0,
     )
     if response.status_code != 204:

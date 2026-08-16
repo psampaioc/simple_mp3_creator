@@ -45,7 +45,7 @@ def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
     import app.main as main_module
 
     monkeypatch.setattr(main_module.settings, "data_backend", "supabase")
-    monkeypatch.setattr(main_module, "dispatch_media_worker", lambda: None)
+    monkeypatch.setattr(main_module, "dispatch_media_worker", lambda job_id: None)
     monkeypatch.setattr(main_module, "managed_api", lambda: FakeManagedAPI())
     app.dependency_overrides[main_module.optional_current_user] = lambda: CurrentUser("user-1", "authenticated", "test-token")
     try:
