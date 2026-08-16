@@ -17,7 +17,7 @@ app.add_middleware(
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -171,8 +171,21 @@ def delete_project(project_id: str) -> None:
         Path(project.output_path).unlink(missing_ok=True)
 
 
-@app.get("/v1/projects/{project_id}/download")
-def download_project(project_id: str) -> FileResponse:
+@app.get("/v1/projects/{project_id}/download", response_model=None)
+def download_project(project_id: str, user: CurrentUser | None = Depends(optional_current_user)) -> FileResponse | dict[str, str]:
+    if settings.data_backend == "supabase":
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        project = managed_api().get_project(user.access_token, project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        if project.get("status") != "ready":
+            raise HTTPException(status_code=409, detail="project audio is not ready")
+        asset = managed_api().get_mp3_asset(user.access_token, project_id)
+        if asset is None:
+            raise HTTPException(status_code=404, detail="project audio not found")
+        filename = "".join(character if character.isalnum() or character in "-_ " else "_" for character in str(project.get("title") or "audio")).strip() or "audio"
+        return {"url": managed_api().create_signed_url(user.access_token, str(asset["storage_path"])), "filename": f"{filename}.mp3"}
     try:
         project = local_store().get_project(project_id)
     except KeyError as error:

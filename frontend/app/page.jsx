@@ -18,6 +18,7 @@ export default function HomePage() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState("");
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -58,6 +59,16 @@ export default function HomePage() {
     return () => window.clearInterval(poll);
   }, [project]);
 
+  useEffect(() => {
+    if (!project || project.status !== "ready" || !session) return undefined;
+    setDownloadUrl("");
+    apiFetch(`/v1/projects/${project.id}/download`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Audio download is unavailable."))))
+      .then((data) => setDownloadUrl(data.url))
+      .catch((requestError) => setError(requestError.message));
+    return undefined;
+  }, [project, session]);
+
   const estimate = useMemo(() => {
     if (!text.length) return "About 0 minutes";
     return `About ${Math.max(1, Math.ceil(text.length / 850))} minute${text.length > 850 ? "s" : ""}`;
@@ -94,7 +105,7 @@ export default function HomePage() {
           {error && <p className="error" role="alert">{error}</p>}
           <button className="button" type="submit" disabled={creating || !text.trim()}>{creating ? "Starting…" : "Generate audio"}</button>
         </form>
-        <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div><audio controls src={`${API_URL}/v1/projects/${project.id}/download`} /><a className="download-link" href={`${API_URL}/v1/projects/${project.id}/download`}>Download MP3 ↗</a></>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
+        <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio controls src={downloadUrl} /><a className="download-link" href={downloadUrl}>Download MP3 ↗</a></> : <p className="stage">Preparing a private download link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
       </section>
       <footer><span>Private by design.</span><span>Local preview · fake TTS · MP3 output</span></footer>
     </main>

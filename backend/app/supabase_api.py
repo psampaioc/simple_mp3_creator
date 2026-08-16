@@ -152,3 +152,29 @@ class SupabaseAPI:
         if not isinstance(rows, list) or len(rows) != 1:
             raise SupabaseAPIError("Supabase returned an unexpected asset response")
         return rows[0]
+
+    def get_mp3_asset(self, access_token: str, project_id: str) -> dict[str, Any] | None:
+        response = self._request(
+            "GET",
+            "assets",
+            access_token,
+            params={"select": "*", "project_id": f"eq.{project_id}", "kind": "eq.mp3", "order": "created_at.desc", "limit": "1"},
+        )
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected asset response")
+        return rows[0] if rows else None
+
+    def create_signed_url(self, access_token: str, storage_path: str, expires_in: int = 900) -> str:
+        with httpx.Client(transport=self.transport, timeout=10.0) as client:
+            response = client.post(
+                f"{self.storage_url}/object/sign/project-assets/{storage_path}",
+                headers=self._headers(access_token),
+                json={"expiresIn": expires_in},
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase signed URL returned HTTP {response.status_code}")
+        signed_url = response.json().get("signedURL")
+        if not isinstance(signed_url, str) or not signed_url:
+            raise SupabaseAPIError("Supabase returned an unexpected signed URL response")
+        return f"{self.storage_url}{signed_url}" if signed_url.startswith("/") else signed_url
