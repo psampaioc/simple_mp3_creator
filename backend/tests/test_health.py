@@ -67,6 +67,54 @@ def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
     assert response.json()["id"] == "project-1"
 
 
+def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) -> None:
+    class FakeManagedAPI:
+        def __init__(self):
+            self.project_updates = []
+            self.job_updates = []
+
+        def list_projects(self, token):
+            return []
+
+        def count_projects_since(self, token, created_since):
+            return 0
+
+        def create_project(self, token, project):
+            return {"id": "project-1", **project}
+
+        def create_job(self, token, job):
+            return {"id": "job-1", **job}
+
+        def update_project(self, token, project_id, values):
+            self.project_updates.append((project_id, values))
+
+        def update_job_service(self, job_id, values):
+            self.job_updates.append((job_id, values))
+
+    import app.main as main_module
+
+    fake_api = FakeManagedAPI()
+    monkeypatch.setattr(main_module.settings, "data_backend", "supabase")
+    monkeypatch.setattr(main_module, "dispatch_media_worker", lambda job_id: (_ for _ in ()).throw(RuntimeError("GitHub unavailable")))
+    monkeypatch.setattr(main_module, "managed_api", lambda: fake_api)
+    app.dependency_overrides[main_module.optional_current_user] = lambda: CurrentUser("user-1", "authenticated", "test-token")
+    try:
+        response = TestClient(app).post(
+            "/v1/projects",
+            json={"title": "Managed", "text": "Hello world.", "voice_id": "en-US-AriaNeural"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        monkeypatch.setattr(main_module.settings, "data_backend", "local")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The audio worker could not be started. Please try again."
+    assert fake_api.project_updates == [("project-1", {"status": "failed"})]
+    assert fake_api.job_updates[0][0] == "job-1"
+    assert fake_api.job_updates[0][1]["status"] == "failed"
+    assert fake_api.job_updates[0][1]["error_code"] == "WORKER_DISPATCH_FAILED"
+
+
 def test_managed_project_creation_rejects_an_active_generation(monkeypatch) -> None:
     class FakeManagedAPI:
         def list_projects(self, token):
