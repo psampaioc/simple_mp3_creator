@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function HomePage() {
   const [voices, setVoices] = useState([]);
@@ -49,13 +49,19 @@ export default function HomePage() {
   }
 
   async function apiFetch(path, options = {}) {
+    if (!API_URL) throw new Error("Service temporarily unavailable. Please try again shortly.");
     const token = session?.access_token;
     const headers = { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
     return fetch(`${API_URL}${path}`, { ...options, headers });
   }
 
   useEffect(() => {
-    fetch(`${API_URL}/v1/voices`).then((response) => response.json()).then(setVoices).catch(() => setError("Voice list is unavailable. Start the local API and try again."));
+    if (!API_URL) {
+      setError("Voice list temporarily unavailable. Please try again shortly.");
+      return undefined;
+    }
+    fetch(`${API_URL}/v1/voices`).then((response) => response.ok ? response.json() : Promise.reject(new Error("Voice list unavailable"))).then(setVoices).catch(() => setError("Voice list temporarily unavailable. Please try again shortly."));
+    return undefined;
   }, []);
 
   useEffect(() => {

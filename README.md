@@ -17,3 +17,8 @@ The local backend uses the deterministic fake TTS provider by default. Set `TTS_
 
 Day 1 provides the runnable foundation, deterministic media pipeline, local project/job flow, and initial Supabase schema. Production deployment, credentials, public signup, and production database changes remain out of scope.
 
+## Hosted runtime rule
+
+The site is already live. Product validation must use the deployed Vercel frontend/API, Supabase, and the GitHub Actions media worker. Do not start or use the local FastAPI API, SQLite flow, local worker, or local audio generation for product behavior—even during development. A local frontend is allowed only for visual work and must be configured with an explicit deployed `NEXT_PUBLIC_API_URL`; there is no localhost fallback.
+
+For the hosted flow, the FastAPI API creates the Supabase job and dispatches `.github/workflows/media-worker.yml`. GitHub Actions is the only supported media-generation path; it claims the job, generates and uploads the private MP3, and updates Supabase status.

@@ -11,6 +11,9 @@ test("landing page contains the product promise", async () => {
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /Sign in to create audio/);
+  assert.match(page, /temporarily unavailable/);
+  assert.doesNotMatch(page, /Start the local API/);
+  assert.doesNotMatch(page, /localhost:8000/);
   assert.match(layout, /@vercel\/analytics\/next/);
   assert.match(layout, /<Analytics \/>/);
 });

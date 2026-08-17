@@ -75,6 +75,21 @@ def test_project_api_uses_local_job_flow(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(app.state, "local_store", None, raising=False)
 
 
+def test_production_does_not_fall_back_to_local_media(monkeypatch) -> None:
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module.settings, "app_env", "production")
+    monkeypatch.setattr(main_module.settings, "data_backend", "local")
+    response = TestClient(app).post(
+        "/v1/projects",
+        json={"title": "Test", "text": "Hello", "voice_id": "en-US-AriaNeural", "speech_rate": "normal"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "managed media backend is not configured"
+    monkeypatch.setattr(main_module.settings, "app_env", "development")
+
+
 def test_project_api_rejects_empty_text(tmp_path, monkeypatch) -> None:
     app.state.local_store = LocalStore(f"sqlite:///{tmp_path / 'local.db'}", str(tmp_path / "storage"))
     response = TestClient(app).post(
