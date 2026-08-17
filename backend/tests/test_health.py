@@ -23,6 +23,9 @@ def test_cleanup_requires_cron_secret() -> None:
 
 def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
     class FakeManagedAPI:
+        def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
+            return 0
+
         def list_projects(self, token):
             return []
 
@@ -73,6 +76,9 @@ def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) 
             self.project_updates = []
             self.job_updates = []
 
+        def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
+            return 0
+
         def list_projects(self, token):
             return []
 
@@ -117,6 +123,9 @@ def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) 
 
 def test_managed_project_creation_rejects_an_active_generation(monkeypatch) -> None:
     class FakeManagedAPI:
+        def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
+            return 0
+
         def list_projects(self, token):
             return [{"status": "generating"}]
 

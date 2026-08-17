@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from app.supabase_api import SupabaseAPI
@@ -54,3 +56,14 @@ def test_supabase_api_counts_recent_projects() -> None:
 
     api = SupabaseAPI("https://example.supabase.co", "publishable", httpx.MockTransport(handler))
     assert api.count_projects_since("user-token", "2026-08-17T00:00:00+00:00") == 3
+
+
+def test_supabase_api_cleans_stale_jobs() -> None:
+    def handler(request):
+        assert request.url.path == "/rest/v1/rpc/cleanup_stale_jobs"
+        assert request.headers["Authorization"] == "Bearer service-key"
+        assert json.loads(request.content) == {"p_queue_timeout_seconds": 120, "p_running_timeout_seconds": 900}
+        return httpx.Response(200, json=2)
+
+    api = SupabaseAPI("https://example.supabase.co", "publishable", httpx.MockTransport(handler), secret_key="service-key")
+    assert api.cleanup_stale_jobs_service() == 2

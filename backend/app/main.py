@@ -89,6 +89,7 @@ ACTIVE_GENERATION_STATUSES = {"queued", "extracting", "generating", "tagging", "
 
 
 def enforce_generation_limits(api, user: CurrentUser) -> None:
+    api.cleanup_stale_jobs_service(settings.queued_job_timeout_seconds, settings.running_job_timeout_seconds)
     projects = api.list_projects(user.access_token)
     active_project = next((project for project in projects if project.get("status") in ACTIVE_GENERATION_STATUSES), None)
     if active_project is not None:
@@ -282,7 +283,9 @@ def list_projects(user: CurrentUser | None = Depends(optional_current_user)) -> 
     if settings.data_backend == "supabase":
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
-        return [managed_project_json(project) for project in managed_api().list_projects(user.access_token)]
+        api = managed_api()
+        api.cleanup_stale_jobs_service(settings.queued_job_timeout_seconds, settings.running_job_timeout_seconds)
+        return [managed_project_json(project) for project in api.list_projects(user.access_token)]
     return [project_json(project) for project in local_store().list_projects()]
 
 
