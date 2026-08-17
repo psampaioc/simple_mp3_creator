@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from uuid import uuid4
 
@@ -84,6 +85,19 @@ def managed_project_json(project: dict[str, object | None]) -> dict[str, object 
     return {**project, "stage": project.get("status")}
 
 
+ACTIVE_GENERATION_STATUSES = {"queued", "extracting", "generating", "tagging", "uploading"}
+
+
+def enforce_generation_limits(api, user: CurrentUser) -> None:
+    projects = api.list_projects(user.access_token)
+    if any(project.get("status") in ACTIVE_GENERATION_STATUSES for project in projects):
+        raise HTTPException(status_code=409, detail="An audio generation is already in progress.")
+    created_since = datetime.now(timezone.utc) - timedelta(seconds=settings.generation_rate_limit_window_seconds)
+    recent_count = api.count_projects_since(user.access_token, created_since.isoformat())
+    if recent_count >= settings.generation_rate_limit_count:
+        raise HTTPException(status_code=429, detail="Generation limit reached. Please try again later.")
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
@@ -153,6 +167,8 @@ def create_project(
     if settings.data_backend == "supabase":
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        api = managed_api()
+        enforce_generation_limits(api, user)
         locale = next((voice["locale"] for voice in VOICE_CATALOG if voice["id"] == payload.voice_id), "und")
         if has_source_file:
             if not payload.source_type or not payload.source_filename or not payload.source_content_type or not payload.source_size_bytes:
@@ -161,7 +177,7 @@ def create_project(
                 raise HTTPException(status_code=403, detail="source file does not belong to the current user")
             if payload.source_size_bytes > settings.source_file_max_bytes or payload.source_type not in {"txt", "pdf", "docx"}:
                 raise HTTPException(status_code=413, detail="source file is invalid or too large")
-        project = managed_api().create_project(
+        project = api.create_project(
             user.access_token,
             {
                 "user_id": user.id,
@@ -182,13 +198,13 @@ def create_project(
             },
         )
         if has_source_file:
-            asset = managed_api().create_asset(
+            asset = api.create_asset(
                 user.access_token,
                 {"project_id": project["id"], "user_id": user.id, "kind": "source_original", "storage_path": payload.source_storage_path, "content_type": payload.source_content_type, "size_bytes": payload.source_size_bytes},
             )
-            managed_api().update_project(user.access_token, str(project["id"]), {"source_asset_id": asset["id"]})
+            api.update_project(user.access_token, str(project["id"]), {"source_asset_id": asset["id"]})
             project["source_asset_id"] = asset["id"]
-        job = managed_api().create_job(
+        job = api.create_job(
             user.access_token,
             {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
         )

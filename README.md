@@ -2,7 +2,7 @@
 
 An audio-only text-to-MP3 application. The repository is organized as a small full-stack monorepo: `frontend/` contains the Next.js product UI, `backend/` contains the FastAPI API and media engine, `supabase/` contains database migrations and security policies, and `legacy/` preserves the original prototype.
 
-**Repository status verified:** 2026-08-17. The checkout now includes the TXT/PDF/DOCX upload and extraction path, but the new migration, worker dependencies, and deployed managed flow still require validation before release.
+**Repository status verified:** 2026-08-17. The checkout includes the TXT/PDF/DOCX upload and extraction path, compact account controls, server-side generation limits, and generation-state locking. Deployment remains subject to the normal PR and hosted validation workflow.
 
 ## Local development
 
@@ -25,8 +25,8 @@ The site is already live. Product validation must use the deployed Vercel fronte
 
 For the hosted flow, the FastAPI API creates the Supabase job and dispatches `.github/workflows/media-worker.yml`. GitHub Actions is the only supported media-generation path; it claims the job, generates and uploads the private MP3, and updates Supabase status.
 
-## Planned document upload
+## Implemented document upload and account controls
 
-The planned upload flow supports `.txt`, `.pdf`, and `.docx`: the browser uploads the private source file to Supabase Storage, the hosted worker extracts and normalizes text, and the existing TTS job generates the MP3. The source remains subject to size, type, character, and privacy limits. OCR for scanned PDFs and legacy `.doc` files are intentionally deferred.
+The upload flow supports `.txt`, `.pdf`, and `.docx`: the browser uploads the private source file to Supabase Storage, the hosted worker extracts and normalizes text, and the existing TTS job generates the MP3. The source remains subject to size, type, character, and privacy limits. OCR for scanned PDFs and legacy `.doc` files are intentionally deferred.
 
-This section records the 2026-08-17 repository audit and implementation decision; it does not claim that the feature is already deployed.
+The 2026-08-17 account update adds a small sign-in/sign-up dropdown, initials for authenticated users, sign-out, a five-generation-per-hour server-side limit, and a one-active-generation rule enforced by the API and reflected by the disabled Generate button.
