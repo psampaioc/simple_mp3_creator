@@ -105,6 +105,18 @@ class SupabaseAPI:
         payload = response.json()
         return payload if isinstance(payload, dict) and payload else None
 
+    def cleanup_stale_jobs_service(self, queued_timeout_seconds: int = 120, running_timeout_seconds: int = 900) -> int:
+        response = self._service_request(
+            "POST",
+            "rpc/cleanup_stale_jobs",
+            json={
+                "p_queue_timeout_seconds": queued_timeout_seconds,
+                "p_running_timeout_seconds": running_timeout_seconds,
+            },
+        )
+        result = response.json()
+        return int(result) if isinstance(result, int) else 0
+
     def update_job_service(self, job_id: str, values: dict[str, Any]) -> None:
         self._service_request("PATCH", "jobs", params={"id": f"eq.{job_id}"}, json=values)
 

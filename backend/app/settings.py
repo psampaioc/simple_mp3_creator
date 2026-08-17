@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     source_file_max_bytes: int = 5 * 1024 * 1024
     generation_rate_limit_count: int = 5
     generation_rate_limit_window_seconds: int = 3600
+    queued_job_timeout_seconds: int = 120
+    running_job_timeout_seconds: int = 900
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
