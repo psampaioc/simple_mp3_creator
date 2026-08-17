@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import secrets
+from pathlib import PurePath
+from uuid import uuid4
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,24 +20,45 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
 
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    text: str = Field(min_length=1, max_length=10_000)
+    text: str | None = Field(default=None, max_length=10_000)
     voice_id: str = Field(min_length=1, max_length=120)
     speech_rate: str = Field(default="normal", pattern="^(slow|normal|fast)$")
     author: str | None = Field(default=None, max_length=200)
     output_format: str = Field(default="mp3", pattern="^mp3$")
+    source_type: str | None = Field(default=None, pattern="^(txt|pdf|docx)$")
+    source_storage_path: str | None = Field(default=None, max_length=300)
+    source_filename: str | None = Field(default=None, max_length=255)
+    source_content_type: str | None = Field(default=None, max_length=120)
+    source_size_bytes: int | None = Field(default=None, gt=0)
+
+
+class SourceFileCreate(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=120)
+    size_bytes: int = Field(gt=0)
+
+
+class ExtractedTextUpdate(BaseModel):
+    text: str = Field(min_length=1, max_length=10_000)
 
 
 VOICE_CATALOG = [
     {"id": "en-US-AriaNeural", "locale": "en-US", "label": "Aria · English (US)"},
     {"id": "pt-BR-FranciscaNeural", "locale": "pt-BR", "label": "Francisca · Português (Brasil)"},
 ]
+
+SOURCE_TYPES = {
+    ".txt": ("txt", "text/plain"),
+    ".pdf": ("pdf", "application/pdf"),
+    ".docx": ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+}
 
 
 def local_store() -> LocalStore:
@@ -96,34 +119,75 @@ def authenticated_identity(user: CurrentUser = Depends(current_user)) -> dict[st
     return {"id": user.id, "role": user.role}
 
 
+@app.post("/v1/source-files")
+def create_source_file(payload: SourceFileCreate, user: CurrentUser | None = Depends(optional_current_user)) -> dict[str, object]:
+    if settings.data_backend != "supabase":
+        raise HTTPException(status_code=503, detail="document uploads require the managed media backend")
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+    suffix = PurePath(payload.filename).suffix.lower()
+    source_type = SOURCE_TYPES.get(suffix)
+    if source_type is None or payload.content_type not in {source_type[1], "application/octet-stream"}:
+        raise HTTPException(status_code=415, detail="only .txt, .pdf, and .docx files are supported")
+    if payload.size_bytes > settings.source_file_max_bytes:
+        raise HTTPException(status_code=413, detail="document exceeds the 5 MB limit")
+    storage_path = f"{user.id}/source/{uuid4().hex}{suffix}"
+    target = managed_api().create_signed_upload_url(user.access_token, storage_path)
+    return {**target, "source_type": source_type[0], "content_type": source_type[1], "max_size_bytes": settings.source_file_max_bytes}
+
+
 @app.post("/v1/projects", status_code=status.HTTP_202_ACCEPTED)
 def create_project(
     payload: ProjectCreate,
     background_tasks: BackgroundTasks,
     user: CurrentUser | None = Depends(optional_current_user),
 ) -> dict[str, object | None]:
-    source_text = normalize_text(payload.text)
-    if not source_text:
-        raise HTTPException(status_code=422, detail="text must contain non-whitespace content")
+    source_text = normalize_text(payload.text or "")
+    has_source_file = payload.source_storage_path is not None
+    if source_text and has_source_file:
+        raise HTTPException(status_code=422, detail="choose pasted text or a source file, not both")
+    if not source_text and not has_source_file:
+        raise HTTPException(status_code=422, detail="text or a supported source file is required")
+    if settings.app_env == "production" and settings.data_backend != "supabase":
+        raise HTTPException(status_code=503, detail="managed media backend is not configured")
     if settings.data_backend == "supabase":
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
         locale = next((voice["locale"] for voice in VOICE_CATALOG if voice["id"] == payload.voice_id), "und")
+        if has_source_file:
+            if not payload.source_type or not payload.source_filename or not payload.source_content_type or not payload.source_size_bytes:
+                raise HTTPException(status_code=422, detail="source file metadata is incomplete")
+            if not payload.source_storage_path.startswith(f"{user.id}/source/"):
+                raise HTTPException(status_code=403, detail="source file does not belong to the current user")
+            if payload.source_size_bytes > settings.source_file_max_bytes or payload.source_type not in {"txt", "pdf", "docx"}:
+                raise HTTPException(status_code=413, detail="source file is invalid or too large")
         project = managed_api().create_project(
             user.access_token,
             {
                 "user_id": user.id,
                 "title": payload.title.strip(),
-                "source_text": source_text,
-                "character_count": len(source_text),
+                "source_text": None if has_source_file else source_text,
+                "character_count": None if has_source_file else len(source_text),
                 "voice_id": payload.voice_id,
                 "locale": locale,
                 "speech_rate": payload.speech_rate,
                 "author": payload.author,
                 "output_format": payload.output_format,
                 "status": "queued",
+                "source_type": payload.source_type or "pasted",
+                "source_storage_path": payload.source_storage_path,
+                "source_filename": payload.source_filename,
+                "source_content_type": payload.source_content_type,
+                "extraction_status": "queued" if has_source_file else "not_needed",
             },
         )
+        if has_source_file:
+            asset = managed_api().create_asset(
+                user.access_token,
+                {"project_id": project["id"], "user_id": user.id, "kind": "source_original", "storage_path": payload.source_storage_path, "content_type": payload.source_content_type, "size_bytes": payload.source_size_bytes},
+            )
+            managed_api().update_project(user.access_token, str(project["id"]), {"source_asset_id": asset["id"]})
+            project["source_asset_id"] = asset["id"]
         job = managed_api().create_job(
             user.access_token,
             {"project_id": project["id"], "user_id": user.id, "status": "queued", "stage": "queued"},
@@ -142,6 +206,32 @@ def create_project(
     )
     background_tasks.add_task(generate_audio, project.id, local_store())
     return project_json(project)
+
+
+@app.patch("/v1/projects/{project_id}/source-text")
+def update_extracted_text(project_id: str, payload: ExtractedTextUpdate, user: CurrentUser | None = Depends(optional_current_user)) -> dict[str, object | None]:
+    if settings.data_backend != "supabase" or user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+    api = managed_api()
+    project = api.get_project(user.access_token, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if project.get("status") != "review":
+        raise HTTPException(status_code=409, detail="project is not awaiting text review")
+    source_text = normalize_text(payload.text)
+    if not source_text:
+        raise HTTPException(status_code=422, detail="text must contain non-whitespace content")
+    api.update_project(user.access_token, project_id, {"source_text": source_text, "character_count": len(source_text), "status": "queued", "extraction_status": "ready", "extraction_error": None})
+    job = api.get_job_service(project_id)
+    if job is None:
+        raise HTTPException(status_code=500, detail="project job not found")
+    api.update_job_service(str(job["id"]), {"status": "queued", "stage": "queued", "finished_at": None, "locked_at": None, "locked_by": None})
+    try:
+        dispatch_media_worker(str(job["id"]))
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail="media worker is not configured") from error
+    updated = api.get_project(user.access_token, project_id)
+    return managed_project_json(updated or project)
 
 
 @app.get("/v1/projects")

@@ -3,6 +3,8 @@
 ## 1. Document status
 
 - **Status:** Approved MVP direction
+- **Last verified against repository:** 2026-08-17
+- **Implementation note:** The current checkout implements pasted text, hosted MP3 generation, and the document upload/extraction path. The migration and worker dependency changes still require managed-environment validation before deployment.
 - **Product:** A web application that converts user-provided text into downloadable narrated audio
 - **Primary output:** High-quality MP3 with optional JPG/PNG cover art embedded in its ID3 metadata
 - **Alternative output:** M4A may be added after compatibility testing, but it is not required for launch
@@ -11,7 +13,7 @@
 
 ## 2. Product promise
 
-> Paste text or upload a plain-text file, select a natural voice and optional cover image, and download a polished narrated MP3.
+> Paste text or upload a supported document, select a natural voice and optional cover image, and download a polished narrated MP3.
 
 The MVP is an audio product. A cover image is embedded as MP3 ID3 `APIC` artwork so compatible players can display it, but it does not create a visual or video track. The generated file remains ordinary audio and is cheap to generate, store, and deliver.
 
@@ -87,7 +89,7 @@ Do not transcode merely to reach a nominal bitrate when the upstream MP3 is alre
 
 - MP4 and all video output.
 - GIFs, animations, waveforms, visualizers, slides, and timelines.
-- Rich-text, PDF, EPUB, and DOCX ingestion.
+- Rich-text, EPUB, and legacy binary `.doc` ingestion.
 - Generative cover art.
 - Voice cloning.
 - User-uploaded voice models.
@@ -98,6 +100,19 @@ Do not transcode merely to reach a nominal bitrate when the upstream MP3 is alre
 - Payments during the free launch.
 - Redis, Celery, Kafka, Kubernetes, and distributed workflow engines.
 - Offline model hosting such as Piper until provider economics or reliability justify it.
+
+### 4.3 Document ingestion decision — 2026-08-17
+
+The repository audit on 2026-08-17 found that the current frontend submitted only JSON text to `POST /v1/projects`. The KISS document path has now been implemented in the checkout as:
+
+- Support `.txt`, `.pdf`, and `.docx` uploads.
+- Upload original documents directly from the browser to private Supabase Storage using a short-lived signed target.
+- Create an extraction-backed project/job, then let the hosted worker download the private source, extract text, normalize it, enforce the existing 10,000-character limit, and continue through the normal TTS pipeline.
+- Show the extracted text in an editable preview before generation where practical; extraction must never silently replace user-visible source content.
+- Enforce a 5 MB source-file limit, allowed type validation, page/text limits, temporary-file cleanup, and no source-text logging.
+- Defer OCR for scanned PDFs and support for legacy `.doc` files until a separate tested capability is justified.
+
+This is implemented in the checkout, not a claim that the feature is already deployed or production-validated.
 
 ## 5. Exact technology stack
 
@@ -312,6 +327,15 @@ DELETE /v1/projects/{project_id}
 GET    /v1/me/usage
 DELETE /v1/me
 ```
+
+Document-ingestion endpoints implemented in the checkout:
+
+```text
+POST   /v1/source-files
+PATCH  /v1/projects/{project_id}/source-text
+```
+
+`POST /v1/source-files` validates metadata and returns a short-lived signed upload target. The browser uploads directly to private Storage, then `POST /v1/projects` creates the extraction job. The worker pauses the project in `review`; `PATCH /v1/projects/{project_id}/source-text` saves the edited extraction and requeues the same job for TTS. The browser must not parse PDFs/DOCX as the authoritative path.
 
 `POST /v1/uploads/cover-art` validates metadata and returns a short-lived signed direct-upload target. The browser uploads directly to private Storage; it does not stream the image through Vercel.
 
