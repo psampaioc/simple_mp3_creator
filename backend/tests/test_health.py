@@ -90,6 +90,8 @@ def test_managed_project_creation_rejects_an_active_generation(monkeypatch) -> N
         monkeypatch.setattr(main_module.settings, "data_backend", "local")
 
     assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "GENERATION_IN_PROGRESS"
+    assert response.json()["detail"]["project"]["status"] == "generating"
 
 
 def test_project_api_uses_local_job_flow(tmp_path, monkeypatch) -> None:

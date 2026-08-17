@@ -44,6 +44,26 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session) return undefined;
+    let cancelled = false;
+    apiFetch("/v1/projects")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Project status temporarily unavailable.");
+        return response.json();
+      })
+      .then((projects) => {
+        if (cancelled || !Array.isArray(projects)) return;
+        const existing = projects.find((item) => ACTIVE_GENERATION_STATUSES.includes(item.status) || item.status === "review");
+        if (existing) {
+          setProject(existing);
+          if (existing.status === "review" && typeof existing.source_text === "string") setReviewText(existing.source_text);
+        }
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [session]);
+
   function openAuth(mode) {
     setAuthMode(mode);
     setAuthError("");
@@ -182,7 +202,14 @@ export default function HomePage() {
       }
       const response = await apiFetch("/v1/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || (sourceFile?.name?.replace(/\.[^.]+$/, "") || "Untitled recording"), ...(inputMode === "paste" ? { text } : source), voice_id: voiceId, speech_rate: "normal" }) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "The project could not be created.");
+      if (!response.ok) {
+        if (response.status === 409 && data.detail?.code === "GENERATION_IN_PROGRESS" && data.detail.project) {
+          setProject(data.detail.project);
+          setError("");
+          return;
+        }
+        throw new Error(typeof data.detail === "string" ? data.detail : "The project could not be created.");
+      }
       setProject(data);
       setReviewText(data.source_text || "");
       setUploadStatus("");

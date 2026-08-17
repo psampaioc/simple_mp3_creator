@@ -90,8 +90,16 @@ ACTIVE_GENERATION_STATUSES = {"queued", "extracting", "generating", "tagging", "
 
 def enforce_generation_limits(api, user: CurrentUser) -> None:
     projects = api.list_projects(user.access_token)
-    if any(project.get("status") in ACTIVE_GENERATION_STATUSES for project in projects):
-        raise HTTPException(status_code=409, detail="An audio generation is already in progress.")
+    active_project = next((project for project in projects if project.get("status") in ACTIVE_GENERATION_STATUSES), None)
+    if active_project is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "GENERATION_IN_PROGRESS",
+                "message": "An audio generation is already in progress.",
+                "project": managed_project_json(active_project),
+            },
+        )
     created_since = datetime.now(timezone.utc) - timedelta(seconds=settings.generation_rate_limit_window_seconds)
     recent_count = api.count_projects_since(user.access_token, created_since.isoformat())
     if recent_count >= settings.generation_rate_limit_count:
