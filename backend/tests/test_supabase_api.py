@@ -31,3 +31,16 @@ def test_supabase_api_creates_signed_url_for_private_asset() -> None:
     asset = api.get_mp3_asset("user-token", "project-1")
     assert asset == {"storage_path": "user-1/project-1.mp3"}
     assert api.create_signed_url("user-token", asset["storage_path"]) == "https://example.supabase.co/storage/v1/object/sign/project-assets/user-1/project-1.mp3?token=test"
+
+
+def test_supabase_api_creates_signed_upload_target() -> None:
+    def handler(request):
+        assert request.url.path.endswith("/storage/v1/object/upload/sign/project-assets/user-1/source/file.txt")
+        return httpx.Response(200, json={"token": "upload-token", "signedURL": "/storage/v1/object/upload/sign/project-assets/user-1/source/file.txt"})
+
+    api = SupabaseAPI("https://example.supabase.co", "publishable", httpx.MockTransport(handler))
+    assert api.create_signed_upload_url("user-token", "user-1/source/file.txt") == {
+        "path": "user-1/source/file.txt",
+        "token": "upload-token",
+        "url": "/storage/v1/object/upload/sign/project-assets/user-1/source/file.txt",
+    }

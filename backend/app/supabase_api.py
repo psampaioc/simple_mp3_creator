@@ -95,6 +95,13 @@ class SupabaseAPI:
     def update_job_service(self, job_id: str, values: dict[str, Any]) -> None:
         self._service_request("PATCH", "jobs", params={"id": f"eq.{job_id}"}, json=values)
 
+    def get_job_service(self, project_id: str) -> dict[str, Any] | None:
+        response = self._service_request("GET", "jobs", params={"select": "*", "project_id": f"eq.{project_id}", "limit": "1"})
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected job response")
+        return rows[0] if rows else None
+
     def get_project_service(self, project_id: str) -> dict[str, Any] | None:
         response = self._service_request("GET", "projects", params={"select": "*", "id": f"eq.{project_id}", "limit": "1"})
         rows = response.json()
@@ -127,6 +134,25 @@ class SupabaseAPI:
         if response.is_error:
             raise SupabaseAPIError(f"Supabase asset upload returned HTTP {response.status_code}")
 
+    def create_signed_upload_url(self, access_token: str, storage_path: str, expires_in: int = 7200) -> dict[str, str]:
+        with httpx.Client(transport=self.transport, timeout=10.0) as client:
+            response = client.post(
+                f"{self.storage_url}/object/upload/sign/project-assets/{storage_path}",
+                headers=self._headers(access_token),
+                json={"upsert": False},
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase signed upload URL returned HTTP {response.status_code}")
+        payload = response.json()
+        token = payload.get("token")
+        signed_url = payload.get("signedURL") or payload.get("url")
+        if not isinstance(token, str) or not token:
+            raise SupabaseAPIError("Supabase returned an unexpected signed upload token")
+        result = {"path": storage_path, "token": token}
+        if isinstance(signed_url, str) and signed_url:
+            result["url"] = signed_url
+        return result
+
     def update_project_service(self, project_id: str, values: dict[str, Any]) -> None:
         with httpx.Client(transport=self.transport, timeout=10.0) as client:
             response = client.patch(
@@ -147,6 +173,18 @@ class SupabaseAPI:
             )
         if response.is_error:
             raise SupabaseAPIError(f"Supabase asset upload returned HTTP {response.status_code}")
+
+    def download_asset_service(self, storage_path: str, max_bytes: int) -> bytes:
+        with httpx.Client(transport=self.transport, timeout=30.0) as client:
+            response = client.get(
+                f"{self.storage_url}/object/project-assets/{storage_path}",
+                headers=self._service_headers(),
+            )
+        if response.is_error:
+            raise SupabaseAPIError(f"Supabase asset download returned HTTP {response.status_code}")
+        if len(response.content) > max_bytes:
+            raise SupabaseAPIError("Supabase asset exceeds the configured size limit")
+        return response.content
 
     def create_asset_service(self, asset: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(transport=self.transport, timeout=10.0) as client:

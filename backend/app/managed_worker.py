@@ -9,6 +9,7 @@ from typing import Protocol
 
 from mutagen.mp3 import MP3
 
+from app.document_extract import extract_document
 from app.media import EdgeTTSProvider, FakeTTSProvider, PiperTTSProvider, add_metadata, normalize_text, synthesize_sync
 from app.settings import settings
 
@@ -21,6 +22,7 @@ class ManagedMediaAPI(Protocol):
     def create_asset_service(self, asset: dict[str, object]) -> dict[str, object]: ...
     def update_project_service(self, project_id: str, values: dict[str, object]) -> None: ...
     def update_job_service(self, job_id: str, values: dict[str, object]) -> None: ...
+    def download_asset_service(self, storage_path: str, max_bytes: int) -> bytes: ...
 
 
 def generate_managed_audio(project: dict[str, object], api: ManagedMediaAPI, access_token: str) -> None:
@@ -57,6 +59,27 @@ def generate_managed_audio_service(project: dict[str, object], job: dict[str, ob
     job_id = str(job["id"])
     user_id = str(project["user_id"])
     try:
+        if project.get("source_asset_id"):
+            api.update_project_service(project_id, {"status": "extracting", "extraction_status": "extracting"})
+            api.update_job_service(job_id, {"status": "extracting", "stage": "extracting"})
+            content = api.download_asset_service(str(project["source_storage_path"]), settings.source_file_max_bytes)
+            source_text = extract_document(
+                str(project["source_filename"]),
+                str(project["source_content_type"]),
+                content,
+            )
+            api.update_project_service(
+                project_id,
+                {
+                    "source_text": source_text,
+                    "character_count": len(source_text),
+                    "status": "review",
+                    "extraction_status": "ready",
+                    "extraction_error": None,
+                },
+            )
+            api.update_job_service(job_id, {"status": "review", "stage": "review", "finished_at": datetime.now(timezone.utc).isoformat()})
+            return
         api.update_project_service(project_id, {"status": "generating"})
         api.update_job_service(job_id, {"status": "generating", "stage": "generating", "started_at": datetime.now(timezone.utc).isoformat()})
         with tempfile.TemporaryDirectory(prefix=f"managed-{project_id}-") as temp:
@@ -82,6 +105,9 @@ def generate_managed_audio_service(project: dict[str, object], job: dict[str, ob
             api.update_project_service(project_id, {"status": "ready", "duration_ms": round(audio.info.length * 1000), "output_size_bytes": len(content), "output_bitrate": audio.info.bitrate, "cover_asset_id": None})
             api.update_job_service(job_id, {"status": "ready", "stage": "ready", "finished_at": datetime.now(timezone.utc).isoformat(), "error_code": None, "error_detail": None})
     except Exception as error:
-        api.update_project_service(project_id, {"status": "failed"})
+        failure_values: dict[str, object] = {"status": "failed"}
+        if project.get("source_asset_id"):
+            failure_values.update({"extraction_status": "failed", "extraction_error": str(error)[:500]})
+        api.update_project_service(project_id, failure_values)
         api.update_job_service(job_id, {"status": "failed", "stage": "failed", "finished_at": datetime.now(timezone.utc).isoformat(), "error_code": type(error).__name__, "error_detail": str(error)[:500]})
         raise

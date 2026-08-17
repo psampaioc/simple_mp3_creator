@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     data_backend: str = "local"
     cron_secret: str = ""
+    source_file_max_bytes: int = 5 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
