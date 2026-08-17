@@ -219,7 +219,26 @@ def create_project(
         try:
             dispatch_media_worker(str(job["id"]))
         except RuntimeError as error:
-            raise HTTPException(status_code=503, detail="media worker is not configured") from error
+            # The project/job are created before dispatch so the worker can claim
+            # them. If dispatch fails, do not leave an orphaned queued job that
+            # will be restored as active forever after a page reload.
+            api.update_project(user.access_token, str(project["id"]), {"status": "failed"})
+            try:
+                api.update_job_service(
+                    str(job["id"]),
+                    {
+                        "status": "failed",
+                        "stage": "failed",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "error_code": "WORKER_DISPATCH_FAILED",
+                        "error_detail": str(error)[:500],
+                    },
+                )
+            except Exception:
+                # The project status is the user-facing guard; keep the original
+                # dispatch failure if the best-effort job update also fails.
+                pass
+            raise HTTPException(status_code=503, detail="The audio worker could not be started. Please try again.") from error
         return managed_project_json(project)
     project = local_store().create_project(
         title=payload.title.strip(),
