@@ -29,6 +29,10 @@ export default function HomePage() {
   const [signingIn, setSigningIn] = useState(false);
   const [authOpen, setAuthOpen] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState("");
+  const [downloadFilename, setDownloadFilename] = useState("audio.mp3");
+  const [downloading, setDownloading] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const audioRef = useRef(null);
   const emailInputRef = useRef(null);
 
   useEffect(() => {
@@ -122,10 +126,17 @@ export default function HomePage() {
     setDownloadUrl("");
     apiFetch(`/v1/projects/${project.id}/download`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Audio download is unavailable."))))
-      .then((data) => setDownloadUrl(data.url))
+      .then((data) => {
+        setDownloadUrl(data.url);
+        setDownloadFilename(data.filename || "audio.mp3");
+      })
       .catch((requestError) => setError(requestError.message));
     return undefined;
   }, [project, session]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate, downloadUrl]);
 
   const estimate = useMemo(() => {
     const length = project?.status === "review" ? reviewText.length : text.length;
@@ -164,6 +175,28 @@ export default function HomePage() {
       setError(requestError.message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function downloadAudio() {
+    if (!downloadUrl || downloading) return;
+    setError("");
+    setDownloading(true);
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("The MP3 download is unavailable. Please try again.");
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = downloadFilename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -249,7 +282,7 @@ export default function HomePage() {
           {error && <p className="error" role="alert">{error}</p>}
           <button className="button" type="submit" disabled={creating || generationActive || (project?.status === "review" ? !reviewText.trim() : inputMode === "paste" ? !text.trim() : !sourceFile)}>{generationActive ? "Generating…" : creating ? (project?.status === "review" ? "Starting…" : "Uploading…") : "Generate audio"}</button>
         </form>
-        <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio controls src={downloadUrl} /><a className="download-link" href={downloadUrl}>Download MP3 ↗</a></> : <p className="stage">Preparing a private download link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
+        <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio ref={audioRef} controls src={downloadUrl} /><div className="audio-actions"><label htmlFor="playback-rate">Speed</label><select id="playback-rate" value={playbackRate} onChange={(event) => setPlaybackRate(Number(event.target.value))}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button className="download-button" type="button" onClick={downloadAudio} disabled={downloading}>{downloading ? "Downloading…" : "Download MP3 ↓"}</button></div></> : <p className="stage">Preparing a private audio link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
         </section>
         <footer><span>Private by design.</span><span>Managed preview · private MP3 output</span></footer>
       </div>

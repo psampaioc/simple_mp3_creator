@@ -20,6 +20,9 @@ test("landing page contains the product promise", async () => {
   assert.match(page, /Generating…/);
   assert.match(page, /v1\/projects/);
   assert.match(page, /account-menu/);
+  assert.match(page, /downloadAudio/);
+  assert.match(page, /playback-rate/);
+  assert.match(page, /Download MP3 ↓/);
   assert.match(page, /temporarily unavailable/);
   assert.doesNotMatch(page, /Start the local API/);
   assert.doesNotMatch(page, /localhost:8000/);
