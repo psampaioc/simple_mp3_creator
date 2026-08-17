@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const ACTIVE_GENERATION_STATUSES = ["queued", "extracting", "generating", "tagging", "uploading"];
 
 export default function HomePage() {
   const [voices, setVoices] = useState([]);
@@ -23,6 +24,8 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authMode, setAuthMode] = useState("sign-in");
   const [signingIn, setSigningIn] = useState(false);
   const [authOpen, setAuthOpen] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState("");
@@ -41,16 +44,27 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function signIn(event) {
+  function openAuth(mode) {
+    setAuthMode(mode);
+    setAuthError("");
+    setAuthMessage("");
+    setAuthOpen(true);
+  }
+
+  async function submitAuth(event) {
     event.preventDefault();
     setAuthError("");
+    setAuthMessage("");
     if (!supabase) {
       setAuthError("Supabase is not configured for this deployment.");
       return;
     }
     setSigningIn(true);
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-    if (loginError) setAuthError(loginError.message);
+    const result = authMode === "sign-up"
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) setAuthError(result.error.message);
+    else if (authMode === "sign-up" && !result.data.session) setAuthMessage("Account created. Check your email to confirm it, then sign in.");
     setSigningIn(false);
   }
 
@@ -180,6 +194,9 @@ export default function HomePage() {
     }
   }
 
+  const generationActive = Boolean(project && ACTIVE_GENERATION_STATUSES.includes(project.status));
+  const userInitial = session?.user?.email?.slice(0, 1).toUpperCase() || "?";
+
   useEffect(() => {
     if (!authOpen) return undefined;
     const closeOnEscape = (event) => {
@@ -192,9 +209,9 @@ export default function HomePage() {
 
   return (
     <main className="shell">
-      {!session && authOpen && <div className="auth-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><form className="card auth-card" onSubmit={signIn} role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="auth-heading"><div><p className="eyebrow">PRIVATE PREVIEW</p><h2 id="auth-title">Welcome back.</h2></div><button className="icon-button" type="button" aria-label="Close sign in" onClick={() => setAuthOpen(false)}>×</button></div><p className="auth-intro">Sign in to turn your words into a private MP3.</p>{!isSupabaseConfigured && <p className="error" role="alert">Supabase is not configured for this deployment.</p>}<label htmlFor="email">Email</label><input ref={emailInputRef} id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /><label htmlFor="password">Password</label><input id="password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />{authError && <p className="error" role="alert">{authError}</p>}<button className="button auth-submit" type="submit" disabled={signingIn || !isSupabaseConfigured}>{signingIn ? "Signing in…" : "Sign in"}</button><p className="auth-footnote">Private by design · audio only</p></form></div>}
+      {!session && authOpen && <div className="auth-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><form className="card auth-card" onSubmit={submitAuth} role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="auth-heading"><div><p className="eyebrow">PRIVATE PREVIEW</p><h2 id="auth-title">{authMode === "sign-up" ? "Create an account." : "Welcome back."}</h2></div><button className="icon-button" type="button" aria-label="Close sign in" onClick={() => setAuthOpen(false)}>×</button></div><p className="auth-intro">{authMode === "sign-up" ? "Create a private account for your MP3s." : "Sign in to turn your words into a private MP3."}</p>{!isSupabaseConfigured && <p className="error" role="alert">Supabase is not configured for this deployment.</p>}<label htmlFor="email">Email</label><input ref={emailInputRef} id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /><label htmlFor="password">Password</label><input id="password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} />{authError && <p className="error" role="alert">{authError}</p>}{authMessage && <p className="auth-message" role="status">{authMessage}</p>}<button className="button auth-submit" type="submit" disabled={signingIn || !isSupabaseConfigured}>{signingIn ? "Working…" : authMode === "sign-up" ? "Sign up" : "Sign in"}</button><button className="auth-switch" type="button" onClick={() => openAuth(authMode === "sign-up" ? "sign-in" : "sign-up")}>{authMode === "sign-up" ? "Already have an account? Sign in" : "Need an account? Sign up"}</button><p className="auth-footnote">Private by design · audio only</p></form></div>}
       <div className="page-content" aria-hidden={!session && authOpen}>
-        <header className="masthead"><p className="eyebrow">SIMPLE MP3 CREATOR / MANAGED PREVIEW</p><div className="masthead-actions"><span className="status-dot">● API-first audio</span>{!session && <button className="text-button" type="button" onClick={() => { setAuthError(""); setAuthOpen(true); }}>Sign in <span aria-hidden="true">↗</span></button>}</div></header>
+        <header className="masthead"><p className="eyebrow">SIMPLE MP3 CREATOR / MANAGED PREVIEW</p><div className="masthead-actions"><span className="status-dot">● API-first audio</span><details className="account-menu"><summary className="account-trigger">{session ? userInitial : "Sign up"}</summary><div className="account-popover">{session ? <><span className="account-email">{session.user?.email}</span><button type="button" onClick={() => supabase?.auth.signOut()}>Sign out</button></> : <><button type="button" onClick={() => openAuth("sign-in")}>Sign in</button><button type="button" onClick={() => openAuth("sign-up")}>Sign up</button></>}</div></details></div></header>
         <section className="hero"><div><p className="kicker">Your words, in a voice worth keeping.</p><h1>Make listening out of reading.</h1><p className="lede">Paste a passage, choose a voice, and create a clean MP3 with honest processing states and metadata ready to keep.</p></div><div className="hero-note"><span>01</span><p>Audio only.<br />No video. No clutter.</p></div></section>
         <section className="workspace" id="create">
         <form className="card form-card" onSubmit={createProject}>
@@ -203,7 +220,7 @@ export default function HomePage() {
           {!project || project.status !== "review" ? <><div className="input-mode" role="group" aria-label="Source type"><button className={inputMode === "paste" ? "mode-button active" : "mode-button"} type="button" onClick={() => { setInputMode("paste"); setFileError(""); }}>Paste text</button><button className={inputMode === "upload" ? "mode-button active" : "mode-button"} type="button" onClick={() => { setInputMode("upload"); setFileError(""); }}>Upload document</button></div>{inputMode === "paste" ? <><label htmlFor="text">Narration text</label><textarea id="text" required minLength={1} value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article, note, or passage here…" rows={11} /></> : <><label htmlFor="source-file">Document</label><input id="source-file" type="file" accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={selectSourceFile} />{sourceFile && <p className="file-meta">{sourceFile.name} · {(sourceFile.size / 1024 / 1024).toFixed(2)} MB</p>}{fileError && <p className="error" role="alert">{fileError}</p>}{uploadStatus && <><p className="stage" role="status">{uploadStatus}</p><progress className="upload-progress" value={uploadProgress} max="100" /></>}</>}</> : <><label htmlFor="review-text">Review extracted text</label><textarea id="review-text" required minLength={1} value={reviewText} onChange={(event) => setReviewText(event.target.value)} rows={11} /><p className="stage">Check the extraction before generating audio.</p></>}
           <div className="form-row"><div><label htmlFor="voice">Voice</label><select id="voice" value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>{(voices.length ? voices : [{ id: voiceId, label: "Loading voices…" }]).map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}</select></div><div className="estimate"><span>ESTIMATE</span><strong>{estimate}</strong></div></div>
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="button" type="submit" disabled={creating || (project?.status === "review" ? !reviewText.trim() : inputMode === "paste" ? !text.trim() : !sourceFile)}>{creating ? (project?.status === "review" ? "Starting…" : "Uploading…") : project?.status === "review" ? "Generate audio" : "Generate audio"}</button>
+          <button className="button" type="submit" disabled={creating || generationActive || (project?.status === "review" ? !reviewText.trim() : inputMode === "paste" ? !text.trim() : !sourceFile)}>{generationActive ? "Generating…" : creating ? (project?.status === "review" ? "Starting…" : "Uploading…") : "Generate audio"}</button>
         </form>
         <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio controls src={downloadUrl} /><a className="download-link" href={downloadUrl}>Download MP3 ↗</a></> : <p className="stage">Preparing a private download link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
         </section>

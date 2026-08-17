@@ -44,3 +44,13 @@ def test_supabase_api_creates_signed_upload_target() -> None:
         "token": "upload-token",
         "url": "/storage/v1/object/upload/sign/project-assets/user-1/source/file.txt",
     }
+
+
+def test_supabase_api_counts_recent_projects() -> None:
+    def handler(request):
+        assert request.url.path == "/rest/v1/projects"
+        assert request.headers["Prefer"] == "count=exact"
+        return httpx.Response(200, headers={"content-range": "0-2/3"}, json=[{"id": "1"}, {"id": "2"}, {"id": "3"}])
+
+    api = SupabaseAPI("https://example.supabase.co", "publishable", httpx.MockTransport(handler))
+    assert api.count_projects_since("user-token", "2026-08-17T00:00:00+00:00") == 3

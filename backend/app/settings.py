@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     data_backend: str = "local"
     cron_secret: str = ""
     source_file_max_bytes: int = 5 * 1024 * 1024
+    generation_rate_limit_count: int = 5
+    generation_rate_limit_window_seconds: int = 3600
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

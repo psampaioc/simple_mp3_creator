@@ -15,6 +15,10 @@ test("landing page contains the product promise", async () => {
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /Sign in to create audio/);
+  assert.match(page, /Create an account/);
+  assert.match(page, /Sign out/);
+  assert.match(page, /Generating…/);
+  assert.match(page, /account-menu/);
   assert.match(page, /temporarily unavailable/);
   assert.doesNotMatch(page, /Start the local API/);
   assert.doesNotMatch(page, /localhost:8000/);

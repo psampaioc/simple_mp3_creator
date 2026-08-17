@@ -4,7 +4,7 @@
 
 - **Status:** Approved MVP direction
 - **Last verified against repository:** 2026-08-17
-- **Implementation note:** The current checkout implements pasted text, hosted MP3 generation, and the document upload/extraction path. The migration and worker dependency changes still require managed-environment validation before deployment.
+- **Implementation note:** The current checkout implements pasted text, hosted MP3 generation, document upload/extraction, compact account controls, and server-side generation limits. The managed deployment must still pass the normal hosted validation workflow.
 - **Product:** A web application that converts user-provided text into downloadable narrated audio
 - **Primary output:** High-quality MP3 with optional JPG/PNG cover art embedded in its ID3 metadata
 - **Alternative output:** M4A may be added after compatibility testing, but it is not required for launch
@@ -111,6 +111,12 @@ The repository audit on 2026-08-17 found that the current frontend submitted onl
 - Show the extracted text in an editable preview before generation where practical; extraction must never silently replace user-visible source content.
 - Enforce a 5 MB source-file limit, allowed type validation, page/text limits, temporary-file cleanup, and no source-text logging.
 - Defer OCR for scanned PDFs and support for legacy `.doc` files until a separate tested capability is justified.
+
+### 4.4 Account and generation guardrails — 2026-08-17
+
+- Use a compact account dropdown: sign in/sign up when anonymous; email initials, account email, and sign out when authenticated.
+- Enforce a server-side limit of five accepted generations per user per hour using the Supabase project records; UI limits are only convenience feedback.
+- Reject a new generation while the same user already has a queued, extracting, generating, tagging, or uploading project. The frontend disables the Generate button during those states, while the API remains authoritative.
 
 This is implemented in the checkout, not a claim that the feature is already deployed or production-validated.
 

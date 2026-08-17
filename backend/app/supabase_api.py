@@ -72,6 +72,19 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase returned an unexpected project list")
         return rows
 
+    def count_projects_since(self, access_token: str, created_since: str) -> int:
+        response = self._request(
+            "GET",
+            "projects",
+            access_token,
+            params={"select": "id", "created_at": f"gte.{created_since}"},
+            headers={"Prefer": "count=exact"},
+        )
+        count = response.headers.get("content-range", "").split("/")[-1]
+        if not count.isdigit():
+            raise SupabaseAPIError("Supabase did not return a project count")
+        return int(count)
+
     def create_job(self, access_token: str, job: dict[str, Any]) -> dict[str, Any]:
         response = self._request(
             "POST",
