@@ -105,6 +105,8 @@ def create_project(
     source_text = normalize_text(payload.text)
     if not source_text:
         raise HTTPException(status_code=422, detail="text must contain non-whitespace content")
+    if settings.app_env == "production" and settings.data_backend != "supabase":
+        raise HTTPException(status_code=503, detail="managed media backend is not configured")
     if settings.data_backend == "supabase":
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
