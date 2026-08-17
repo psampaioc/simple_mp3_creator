@@ -59,7 +59,7 @@ def generate_managed_audio_service(project: dict[str, object], job: dict[str, ob
     job_id = str(job["id"])
     user_id = str(project["user_id"])
     try:
-        if project.get("source_asset_id"):
+        if project.get("source_asset_id") and project.get("extraction_status") != "ready":
             api.update_project_service(project_id, {"status": "extracting", "extraction_status": "extracting"})
             api.update_job_service(job_id, {"status": "extracting", "stage": "extracting"})
             content = api.download_asset_service(str(project["source_storage_path"]), settings.source_file_max_bytes)
