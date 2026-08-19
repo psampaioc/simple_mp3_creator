@@ -97,6 +97,12 @@ def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) 
         def update_job_service(self, job_id, values):
             self.job_updates.append((job_id, values))
 
+        def record_generation_error_service(self, error):
+            self.error = error
+
+        def delete_project_service(self, project_id):
+            self.deleted_project = project_id
+
     import app.main as main_module
 
     fake_api = FakeManagedAPI()
@@ -116,25 +122,30 @@ def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) 
     assert response.status_code == 503
     assert response.json()["detail"] == "The audio worker could not be started. Please try again."
     assert fake_api.project_updates == [("project-1", {"status": "failed"})]
+    assert fake_api.deleted_project == "project-1"
     assert fake_api.job_updates[0][0] == "job-1"
     assert fake_api.job_updates[0][1]["status"] == "failed"
     assert fake_api.job_updates[0][1]["error_code"] == "WORKER_DISPATCH_FAILED"
 
 
-def test_managed_project_creation_rejects_an_active_generation(monkeypatch) -> None:
+def test_managed_project_creation_allows_a_queued_generation(monkeypatch) -> None:
     class FakeManagedAPI:
         def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
             return 0
 
-        def list_projects(self, token):
-            return [{"status": "generating"}]
-
         def count_projects_since(self, token, created_since):
             return 0
+
+        def create_project(self, token, project):
+            return {"id": "project-2", **project}
+
+        def create_job(self, token, job):
+            return {"id": "job-2", **job}
 
     import app.main as main_module
 
     monkeypatch.setattr(main_module.settings, "data_backend", "supabase")
+    monkeypatch.setattr(main_module, "dispatch_media_worker", lambda job_id: None)
     monkeypatch.setattr(main_module, "managed_api", lambda: FakeManagedAPI())
     app.dependency_overrides[main_module.optional_current_user] = lambda: CurrentUser("user-1", "authenticated", "test-token")
     try:
@@ -146,9 +157,8 @@ def test_managed_project_creation_rejects_an_active_generation(monkeypatch) -> N
         app.dependency_overrides.clear()
         monkeypatch.setattr(main_module.settings, "data_backend", "local")
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "GENERATION_IN_PROGRESS"
-    assert response.json()["detail"]["project"]["status"] == "generating"
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
 
 
 def test_project_api_uses_local_job_flow(tmp_path, monkeypatch) -> None:

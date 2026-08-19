@@ -189,6 +189,9 @@ class SupabaseAPI:
         if response.is_error:
             raise SupabaseAPIError(f"Supabase project update returned HTTP {response.status_code}")
 
+    def record_generation_error_service(self, error: dict[str, Any]) -> None:
+        self._service_request("POST", "generation_errors", json=error)
+
     def upload_asset_service(self, storage_path: str, content: bytes, content_type: str = "audio/mpeg") -> None:
         with httpx.Client(transport=self.transport, timeout=30.0) as client:
             response = client.post(

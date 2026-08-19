@@ -18,6 +18,8 @@ export default function HomePage() {
   const [reviewText, setReviewText] = useState("");
   const [voiceId, setVoiceId] = useState("en-US-AriaNeural");
   const [project, setProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [refreshingProjects, setRefreshingProjects] = useState(false);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [session, setSession] = useState(null);
@@ -47,26 +49,6 @@ export default function HomePage() {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (!session) return undefined;
-    let cancelled = false;
-    apiFetch("/v1/projects")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Project status temporarily unavailable.");
-        return response.json();
-      })
-      .then((projects) => {
-        if (cancelled || !Array.isArray(projects)) return;
-        const existing = projects.find((item) => ACTIVE_GENERATION_STATUSES.includes(item.status) || item.status === "review");
-        if (existing) {
-          setProject(existing);
-          if (existing.status === "review" && typeof existing.source_text === "string") setReviewText(existing.source_text);
-        }
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [session]);
 
   function openAuth(mode) {
     setAuthMode(mode);
@@ -99,6 +81,40 @@ export default function HomePage() {
     return fetch(`${API_URL}${path}`, { ...options, headers });
   }
 
+  async function refreshProjects(showSpinner = false) {
+    if (!session) return;
+    if (showSpinner) setRefreshingProjects(true);
+    try {
+      const response = await apiFetch("/v1/projects");
+      if (!response.ok) throw new Error("Project status temporarily unavailable.");
+      const nextProjects = await response.json();
+      if (!Array.isArray(nextProjects)) return;
+      setProjects(nextProjects);
+      setProject((current) => {
+        if (current) return nextProjects.find((item) => item.id === current.id) || nextProjects[0] || null;
+        return nextProjects[0] || null;
+      });
+    } catch (requestError) {
+      if (showSpinner) setError(requestError.message);
+    } finally {
+      if (showSpinner) setRefreshingProjects(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session) {
+      setProjects([]);
+      setProject(null);
+      return undefined;
+    }
+    refreshProjects();
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") refreshProjects();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => document.removeEventListener("visibilitychange", refreshOnReturn);
+  }, [session]);
+
   useEffect(() => {
     if (!API_URL) {
       setError("Voice list temporarily unavailable. Please try again shortly.");
@@ -109,13 +125,12 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!project || ["ready", "review", "failed"].includes(project.status)) return undefined;
+    if (!projects.some((item) => ACTIVE_GENERATION_STATUSES.includes(item.status))) return undefined;
     const poll = window.setInterval(async () => {
-      const response = await apiFetch(`/v1/projects/${project.id}`);
-      if (response.ok) setProject(await response.json());
+      await refreshProjects();
     }, 2000);
     return () => window.clearInterval(poll);
-  }, [project]);
+  }, [projects]);
 
   useEffect(() => {
     if (project?.status === "review" && typeof project.source_text === "string") setReviewText(project.source_text);
@@ -171,6 +186,7 @@ export default function HomePage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "The extracted text could not be saved.");
       setProject(data);
+      setProjects((current) => [data, ...current.filter((item) => item.id !== data.id)]);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -242,9 +258,10 @@ export default function HomePage() {
           return;
         }
         throw new Error(typeof data.detail === "string" ? data.detail : "The project could not be created.");
-      }
-      setProject(data);
-      setReviewText(data.source_text || "");
+          }
+          setProject(data);
+          setProjects((current) => [data, ...current.filter((item) => item.id !== data.id)]);
+          setReviewText(data.source_text || "");
       setUploadStatus("");
       setUploadProgress(0);
     } catch (requestError) {
@@ -254,7 +271,6 @@ export default function HomePage() {
     }
   }
 
-  const generationActive = Boolean(project && ACTIVE_GENERATION_STATUSES.includes(project.status));
   const userInitial = session?.user?.email?.slice(0, 1).toUpperCase() || "?";
 
   useEffect(() => {
@@ -280,9 +296,14 @@ export default function HomePage() {
           {!project || project.status !== "review" ? <><div className="input-mode" role="group" aria-label="Source type"><button className={inputMode === "paste" ? "mode-button active" : "mode-button"} type="button" onClick={() => { setInputMode("paste"); setFileError(""); }}>Paste text</button><button className={inputMode === "upload" ? "mode-button active" : "mode-button"} type="button" onClick={() => { setInputMode("upload"); setFileError(""); }}>Upload document</button></div>{inputMode === "paste" ? <><label htmlFor="text">Narration text</label><textarea id="text" required minLength={1} value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article, note, or passage here…" rows={11} /></> : <><label htmlFor="source-file">Document</label><input id="source-file" type="file" accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={selectSourceFile} />{sourceFile && <p className="file-meta">{sourceFile.name} · {(sourceFile.size / 1024 / 1024).toFixed(2)} MB</p>}{fileError && <p className="error" role="alert">{fileError}</p>}{uploadStatus && <><p className="stage" role="status">{uploadStatus}</p><progress className="upload-progress" value={uploadProgress} max="100" /></>}</>}</> : <><label htmlFor="review-text">Review extracted text</label><textarea id="review-text" required minLength={1} value={reviewText} onChange={(event) => setReviewText(event.target.value)} rows={11} /><p className="stage">Check the extraction before generating audio.</p></>}
           <div className="form-row"><div><label htmlFor="voice">Voice</label><select id="voice" value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>{(voices.length ? voices : [{ id: voiceId, label: "Loading voices…" }]).map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}</select></div><div className="estimate"><span>ESTIMATE</span><strong>{estimate}</strong></div></div>
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="button" type="submit" disabled={creating || generationActive || (project?.status === "review" ? !reviewText.trim() : inputMode === "paste" ? !text.trim() : !sourceFile)}>{generationActive ? "Generating…" : creating ? (project?.status === "review" ? "Starting…" : "Uploading…") : "Generate audio"}</button>
+          <button className="button" type="submit" disabled={creating || (project?.status === "review" ? !reviewText.trim() : inputMode === "paste" ? !text.trim() : !sourceFile)}>{creating ? (project?.status === "review" ? "Starting…" : "Uploading…") : "Generate audio"}</button>
         </form>
-        <aside className="card result-card" aria-live="polite"><div className="section-label"><span>PROJECT STATUS</span><span>{project ? project.status.toUpperCase() : "IDLE"}</span></div>{!project && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Keep this tab open during the local preview.</small></div>}{project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.stage === "ready" ? "Ready to listen." : project.stage === "failed" ? "Generation failed." : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio ref={audioRef} controls src={downloadUrl} /><div className="audio-actions"><label htmlFor="playback-rate">Speed</label><select id="playback-rate" value={playbackRate} onChange={(event) => setPlaybackRate(Number(event.target.value))}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button className="download-button" type="button" onClick={downloadAudio} disabled={downloading}>{downloading ? "Downloading…" : "Download MP3 ↓"}</button></div></> : <p className="stage">Preparing a private audio link…</p>}</>}{project.status === "failed" && <p className="error">{project.error_code || "GENERATION_FAILED"}</p>}</div>}</aside>
+        <aside className="card result-card" aria-live="polite">
+          <div className="section-label"><span>MY AUDIOS</span><button className="refresh-button" type="button" onClick={() => refreshProjects(true)} disabled={refreshingProjects}>{refreshingProjects ? "Refreshing…" : "Refresh"}</button></div>
+          {!projects.length && <div className="empty-state"><span className="wave">∿</span><p>Your finished audio will appear here.</p><small>Projects remain available for 24 hours.</small></div>}
+          {projects.length > 0 && <div className="project-list">{projects.map((item) => <button key={item.id} type="button" className={project?.id === item.id ? "project-row selected" : "project-row"} onClick={() => setProject(item)}><span><strong>{item.title}</strong><small>{item.status === "ready" ? "Ready to listen" : item.status === "queued" ? "Waiting in queue" : "Generating audio…"}</small></span><span className="project-status">{item.status === "ready" ? "READY" : item.status === "queued" ? "QUEUED" : "GENERATING"}</span></button>)}</div>}
+          {project && <div className="result-content"><h2>{project.title}</h2><p className="stage">{project.status === "ready" ? "Ready to listen." : project.status === "queued" ? "Waiting for the worker…" : "Preparing your audio…"}</p>{project.status === "ready" && <><div className="metrics"><span>{project.duration_ms ? `${Math.round(project.duration_ms / 1000)} sec` : "—"}</span><span>{project.output_bitrate ? `${Math.round(project.output_bitrate / 1000)} kbps` : "—"}</span></div>{downloadUrl ? <><audio ref={audioRef} controls src={downloadUrl} /><div className="audio-actions"><label htmlFor="playback-rate">Speed</label><select id="playback-rate" value={playbackRate} onChange={(event) => setPlaybackRate(Number(event.target.value))}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button className="download-button" type="button" onClick={downloadAudio} disabled={downloading}>{downloading ? "Downloading…" : "Download MP3 ↓"}</button></div></> : <p className="stage">Preparing a private audio link…</p>}</>}</div>}
+        </aside>
         </section>
         <footer><span>Private by design.</span><span>Managed preview · private MP3 output</span></footer>
       </div>

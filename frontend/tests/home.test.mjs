@@ -17,7 +17,7 @@ test("landing page contains the product promise", async () => {
   assert.match(page, /Sign in to create audio/);
   assert.match(page, /Create an account/);
   assert.match(page, /Sign out/);
-  assert.match(page, /Generating…/);
+  assert.match(page, /Generating audio…/);
   assert.match(page, /v1\/projects/);
   assert.match(page, /account-menu/);
   assert.match(page, /downloadAudio/);

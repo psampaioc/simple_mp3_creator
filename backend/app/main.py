@@ -90,17 +90,6 @@ ACTIVE_GENERATION_STATUSES = {"queued", "extracting", "generating", "tagging", "
 
 def enforce_generation_limits(api, user: CurrentUser) -> None:
     api.cleanup_stale_jobs_service(settings.queued_job_timeout_seconds, settings.running_job_timeout_seconds)
-    projects = api.list_projects(user.access_token)
-    active_project = next((project for project in projects if project.get("status") in ACTIVE_GENERATION_STATUSES), None)
-    if active_project is not None:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "GENERATION_IN_PROGRESS",
-                "message": "An audio generation is already in progress.",
-                "project": managed_project_json(active_project),
-            },
-        )
     created_since = datetime.now(timezone.utc) - timedelta(seconds=settings.generation_rate_limit_window_seconds)
     recent_count = api.count_projects_since(user.access_token, created_since.isoformat())
     if recent_count >= settings.generation_rate_limit_count:
@@ -225,6 +214,17 @@ def create_project(
             # will be restored as active forever after a page reload.
             api.update_project(user.access_token, str(project["id"]), {"status": "failed"})
             try:
+                api.record_generation_error_service(
+                    {
+                        "project_id": str(project["id"]),
+                        "user_id": user.id,
+                        "error_code": "WORKER_DISPATCH_FAILED",
+                        "error_detail": str(error)[:500],
+                    }
+                )
+            except Exception:
+                pass
+            try:
                 api.update_job_service(
                     str(job["id"]),
                     {
@@ -236,8 +236,10 @@ def create_project(
                     },
                 )
             except Exception:
-                # The project status is the user-facing guard; keep the original
-                # dispatch failure if the best-effort job update also fails.
+                pass
+            try:
+                api.delete_project_service(str(project["id"]))
+            except Exception:
                 pass
             raise HTTPException(status_code=503, detail="The audio worker could not be started. Please try again.") from error
         return managed_project_json(project)

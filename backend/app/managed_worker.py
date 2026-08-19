@@ -22,6 +22,8 @@ class ManagedMediaAPI(Protocol):
     def create_asset_service(self, asset: dict[str, object]) -> dict[str, object]: ...
     def update_project_service(self, project_id: str, values: dict[str, object]) -> None: ...
     def update_job_service(self, job_id: str, values: dict[str, object]) -> None: ...
+    def record_generation_error_service(self, error: dict[str, object]) -> None: ...
+    def delete_project_service(self, project_id: str) -> None: ...
     def download_asset_service(self, storage_path: str, max_bytes: int) -> bytes: ...
 
 
@@ -105,9 +107,15 @@ def generate_managed_audio_service(project: dict[str, object], job: dict[str, ob
             api.update_project_service(project_id, {"status": "ready", "duration_ms": round(audio.info.length * 1000), "output_size_bytes": len(content), "output_bitrate": audio.info.bitrate, "cover_asset_id": None})
             api.update_job_service(job_id, {"status": "ready", "stage": "ready", "finished_at": datetime.now(timezone.utc).isoformat(), "error_code": None, "error_detail": None})
     except Exception as error:
-        failure_values: dict[str, object] = {"status": "failed"}
-        if project.get("source_asset_id"):
-            failure_values.update({"extraction_status": "failed", "extraction_error": str(error)[:500]})
-        api.update_project_service(project_id, failure_values)
-        api.update_job_service(job_id, {"status": "failed", "stage": "failed", "finished_at": datetime.now(timezone.utc).isoformat(), "error_code": type(error).__name__, "error_detail": str(error)[:500]})
+        error_code = type(error).__name__
+        error_detail = str(error)[:500]
+        try:
+            api.record_generation_error_service({"project_id": project_id, "user_id": user_id, "error_code": error_code, "error_detail": error_detail})
+        except Exception:
+            pass
+        try:
+            api.update_job_service(job_id, {"status": "failed", "stage": "failed", "finished_at": datetime.now(timezone.utc).isoformat(), "error_code": error_code, "error_detail": error_detail})
+        except Exception:
+            pass
+        api.delete_project_service(project_id)
         raise
