@@ -21,6 +21,7 @@ export default function HomePage() {
   const [projects, setProjects] = useState([]);
   const [refreshingProjects, setRefreshingProjects] = useState(false);
   const [error, setError] = useState("");
+  const [limitOfferOpen, setLimitOfferOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState("");
@@ -252,6 +253,11 @@ export default function HomePage() {
       const response = await apiFetch("/v1/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || (sourceFile?.name?.replace(/\.[^.]+$/, "") || "Untitled recording"), ...(inputMode === "paste" ? { text } : source), voice_id: voiceId, speech_rate: "normal" }) });
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 429 && data.detail?.code === "GENERATION_LIMIT") {
+          setLimitOfferOpen(true);
+          setError("");
+          return;
+        }
         if (response.status === 409 && data.detail?.code === "GENERATION_IN_PROGRESS" && data.detail.project) {
           setProject(data.detail.project);
           setError("");
@@ -286,6 +292,7 @@ export default function HomePage() {
   return (
     <main className="shell">
       {!session && authOpen && <div className="auth-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><form className="card auth-card" onSubmit={submitAuth} role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="auth-heading"><div><p className="eyebrow">PRIVATE PREVIEW</p><h2 id="auth-title">{authMode === "sign-up" ? "Create an account." : "Welcome back."}</h2></div><button className="icon-button" type="button" aria-label="Close sign in" onClick={() => setAuthOpen(false)}>×</button></div><p className="auth-intro">{authMode === "sign-up" ? "Create a private account for your MP3s." : "Sign in to turn your words into a private MP3."}</p>{!isSupabaseConfigured && <p className="error" role="alert">Supabase is not configured for this deployment.</p>}<label htmlFor="email">Email</label><input ref={emailInputRef} id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /><label htmlFor="password">Password</label><input id="password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} />{authError && <p className="error" role="alert">{authError}</p>}{authMessage && <p className="auth-message" role="status">{authMessage}</p>}<button className="button auth-submit" type="submit" disabled={signingIn || !isSupabaseConfigured}>{signingIn ? "Working…" : authMode === "sign-up" ? "Sign up" : "Sign in"}</button><button className="auth-switch" type="button" onClick={() => openAuth(authMode === "sign-up" ? "sign-in" : "sign-up")}>{authMode === "sign-up" ? "Already have an account? Sign in" : "Need an account? Sign up"}</button><p className="auth-footnote">Private by design · audio only</p></form></div>}
+      {limitOfferOpen && <div className="auth-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLimitOfferOpen(false); }}><section className="card auth-card plan-card" role="dialog" aria-modal="true" aria-labelledby="limit-title"><div className="auth-heading"><div><p className="eyebrow">PLAN LIMIT</p><h2 id="limit-title">Make more audio.</h2></div><button className="icon-button" type="button" aria-label="Close plan offer" onClick={() => setLimitOfferOpen(false)}>×</button></div><p className="auth-intro">The Free plan allows 5 generations per hour.</p><p className="plan-offer"><strong>Paid plan</strong><br />20 generations per hour, with the same 24-hour private audio access.</p><button className="button auth-submit" type="button" onClick={() => setLimitOfferOpen(false)}>Continue with Free plan</button></section></div>}
       <div className="page-content" aria-hidden={!session && authOpen}>
         <header className="masthead"><p className="eyebrow">SIMPLE MP3 CREATOR / MANAGED PREVIEW</p><div className="masthead-actions"><span className="status-dot">● API-first audio</span><details className="account-menu"><summary className="account-trigger">{session ? userInitial : "Sign up"}</summary><div className="account-popover">{session ? <><span className="account-email">{session.user?.email}</span><button type="button" onClick={() => supabase?.auth.signOut()}>Sign out</button></> : <><button type="button" onClick={() => openAuth("sign-in")}>Sign in</button><button type="button" onClick={() => openAuth("sign-up")}>Sign up</button></>}</div></details></div></header>
         <section className="hero"><div><p className="kicker">Your words, in a voice worth keeping.</p><h1>Make listening out of reading.</h1><p className="lede">Paste a passage, choose a voice, and create a clean MP3 with honest processing states and metadata ready to keep.</p></div><div className="hero-note"><span>01</span><p>Audio only.<br />No video. No clutter.</p></div></section>

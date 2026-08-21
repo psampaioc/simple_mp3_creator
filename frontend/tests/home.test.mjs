@@ -24,6 +24,8 @@ test("landing page contains the product promise", async () => {
   assert.match(page, /playback-rate/);
   assert.match(page, /Download MP3 ↓/);
   assert.match(page, /temporarily unavailable/);
+  assert.match(page, /Make more audio/);
+  assert.match(page, /20 generations per hour/);
   assert.doesNotMatch(page, /Start the local API/);
   assert.doesNotMatch(page, /localhost:8000/);
   assert.match(layout, /@vercel\/analytics\/next/);

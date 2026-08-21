@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
-  plan text not null default 'free' check (plan in ('free')),
+  plan text not null default 'free' check (plan in ('free', 'paid')),
   monthly_char_limit integer not null default 20000 check (monthly_char_limit > 0),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())

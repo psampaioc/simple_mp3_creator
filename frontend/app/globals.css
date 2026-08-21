@@ -58,6 +58,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .auth-intro { max-width: 300px; margin: 24px 0 28px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .auth-submit { width: 100%; margin-top: 24px; }
 .auth-footnote { margin: 22px 0 0; color: var(--muted); font: 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
+.plan-offer { padding: 16px; border: 1px solid var(--accent); color: var(--muted); font-size: 14px; line-height: 1.6; }
+.plan-offer strong { color: var(--ink); }
 .auth-switch { margin-top: 14px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
 .auth-switch:hover { color: var(--accent); }
 .auth-message { color: #9dc49d; font-size: 13px; line-height: 1.5; }

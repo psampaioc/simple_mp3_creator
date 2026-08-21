@@ -85,6 +85,18 @@ class SupabaseAPI:
             raise SupabaseAPIError("Supabase did not return a project count")
         return int(count)
 
+    def get_profile(self, access_token: str, user_id: str) -> dict[str, Any] | None:
+        response = self._request(
+            "GET",
+            "profiles",
+            access_token,
+            params={"select": "id,plan", "id": f"eq.{user_id}", "limit": "1"},
+        )
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise SupabaseAPIError("Supabase returned an unexpected profile response")
+        return rows[0] if rows else None
+
     def create_job(self, access_token: str, job: dict[str, Any]) -> dict[str, Any]:
         response = self._request(
             "POST",
