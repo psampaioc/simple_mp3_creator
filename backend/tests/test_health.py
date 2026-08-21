@@ -203,7 +203,7 @@ def test_project_api_rejects_empty_text(tmp_path, monkeypatch) -> None:
 def test_voices_and_download_endpoints(tmp_path, monkeypatch) -> None:
     app.state.local_store = LocalStore(f"sqlite:///{tmp_path / 'local.db'}", str(tmp_path / "storage"))
     client = TestClient(app)
-    assert client.get("/v1/voices?locale=pt-BR").json()[0]["id"] == "pt-BR-FranciscaNeural"
+    assert client.get("/v1/voices?locale=pt-BR").json()[0]["id"] == "pt-BR-Faber"
     response = client.post(
         "/v1/projects",
         json={"title": "My recording", "text": "Hello world.", "voice_id": "voice"},
