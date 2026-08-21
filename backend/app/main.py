@@ -52,7 +52,7 @@ class ExtractedTextUpdate(BaseModel):
 
 VOICE_CATALOG = [
     {"id": "en-US-AriaNeural", "locale": "en-US", "label": "Aria · English (US)"},
-    {"id": "pt-BR-FranciscaNeural", "locale": "pt-BR", "label": "Francisca · Português (Brasil)"},
+    {"id": "pt-BR-Faber", "locale": "pt-BR", "label": "Faber · Português (Brasil)"},
 ]
 
 SOURCE_TYPES = {

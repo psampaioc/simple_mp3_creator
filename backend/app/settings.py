@@ -47,5 +47,5 @@ settings = get_settings()
 def piper_model_path_for_locale(locale: str | None) -> str:
     """Return the bundled Piper model matching the project's language."""
     if locale == "pt-BR":
-        return str(Path(settings.piper_model_path).with_name("pt_BR-cadu-medium.onnx"))
+        return str(Path(settings.piper_model_path).with_name("pt_BR-faber-medium.onnx"))
     return settings.piper_model_path
