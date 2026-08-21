@@ -31,6 +31,16 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: media-worker-pip-${{ runner.os }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements.worker.txt') }}
+      - name: Cache Piper voices
+        uses: actions/cache@v4
+        with:
+          path: backend/models
+          key: media-worker-piper-voices-v1-${{ runner.os }}
       - name: Install audio dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg wget
       - name: Install worker dependencies
@@ -38,10 +48,17 @@ jobs:
       - name: Download pinned Piper voice
         working-directory: backend/models
         run: |
-          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx
-          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx.json
-          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx
-          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx.json
+          download_if_missing() {
+            file="$1"
+            url="$2"
+            if [ ! -f "$file" ]; then
+              wget -q --show-progress -O "$file" "$url"
+            fi
+          }
+          download_if_missing en_US-amy-low.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx
+          download_if_missing en_US-amy-low.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx.json
+          download_if_missing pt_BR-faber-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx
+          download_if_missing pt_BR-faber-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx.json
       - name: Process one queued media job
         run: python -m worker.main
         working-directory: backend
