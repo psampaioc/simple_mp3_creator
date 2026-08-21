@@ -240,7 +240,14 @@ class SupabaseAPI:
             "GET",
             "assets",
             access_token,
-            params={"select": "*", "project_id": f"eq.{project_id}", "kind": "eq.mp3", "expires_at": "gt.now()", "order": "created_at.desc", "limit": "1"},
+            params={
+                "select": "*",
+                "project_id": f"eq.{project_id}",
+                "kind": "eq.mp3",
+                "or": "(expires_at.is.null,expires_at.gt.now())",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
         )
         rows = response.json()
         if not isinstance(rows, list):
