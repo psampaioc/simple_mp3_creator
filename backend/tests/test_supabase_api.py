@@ -58,6 +58,16 @@ def test_supabase_api_counts_recent_projects() -> None:
     assert api.count_projects_since("user-token", "2026-08-17T00:00:00+00:00") == 3
 
 
+def test_supabase_api_reads_owned_plan() -> None:
+    def handler(request):
+        assert request.url.path == "/rest/v1/profiles"
+        assert request.url.params["id"] == "eq.user-1"
+        return httpx.Response(200, json=[{"id": "user-1", "plan": "paid"}])
+
+    api = SupabaseAPI("https://example.supabase.co", "publishable", httpx.MockTransport(handler))
+    assert api.get_profile("user-token", "user-1") == {"id": "user-1", "plan": "paid"}
+
+
 def test_supabase_api_cleans_stale_jobs() -> None:
     def handler(request):
         assert request.url.path == "/rest/v1/rpc/cleanup_stale_jobs"

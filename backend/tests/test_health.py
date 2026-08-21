@@ -32,6 +32,9 @@ def test_managed_project_creation_uses_authenticated_user(monkeypatch) -> None:
         def count_projects_since(self, token, created_since):
             return 0
 
+        def get_profile(self, token, user_id):
+            return {"id": user_id, "plan": "free"}
+
         def create_project(self, token, project):
             assert token == "test-token"
             assert project["user_id"] == "user-1"
@@ -85,6 +88,9 @@ def test_managed_project_creation_marks_dispatch_failure_as_failed(monkeypatch) 
         def count_projects_since(self, token, created_since):
             return 0
 
+        def get_profile(self, token, user_id):
+            return {"id": user_id, "plan": "free"}
+
         def create_project(self, token, project):
             return {"id": "project-1", **project}
 
@@ -136,6 +142,9 @@ def test_managed_project_creation_allows_a_queued_generation(monkeypatch) -> Non
         def count_projects_since(self, token, created_since):
             return 0
 
+        def get_profile(self, token, user_id):
+            return {"id": user_id, "plan": "free"}
+
         def create_project(self, token, project):
             return {"id": "project-2", **project}
 
@@ -159,6 +168,76 @@ def test_managed_project_creation_allows_a_queued_generation(monkeypatch) -> Non
 
     assert response.status_code == 202
     assert response.json()["status"] == "queued"
+
+
+def test_paid_plan_allows_twenty_generations_per_hour(monkeypatch) -> None:
+    class FakeManagedAPI:
+        def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
+            return 0
+
+        def get_profile(self, token, user_id):
+            return {"id": user_id, "plan": "paid"}
+
+        def count_projects_since(self, token, created_since):
+            return 19
+
+        def create_project(self, token, project):
+            return {"id": "paid-project", **project}
+
+        def create_job(self, token, job):
+            return {"id": "paid-job", **job}
+
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module.settings, "data_backend", "supabase")
+    monkeypatch.setattr(main_module, "dispatch_media_worker", lambda job_id: None)
+    monkeypatch.setattr(main_module, "managed_api", lambda: FakeManagedAPI())
+    app.dependency_overrides[main_module.optional_current_user] = lambda: CurrentUser("user-1", "authenticated", "test-token")
+    try:
+        response = TestClient(app).post(
+            "/v1/projects",
+            json={"title": "Paid", "text": "Hello world.", "voice_id": "en-US-AriaNeural"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        monkeypatch.setattr(main_module.settings, "data_backend", "local")
+
+    assert response.status_code == 202
+
+
+def test_generation_limit_returns_paid_plan_offer(monkeypatch) -> None:
+    class FakeManagedAPI:
+        def cleanup_stale_jobs_service(self, queued_timeout_seconds, running_timeout_seconds):
+            return 0
+
+        def get_profile(self, token, user_id):
+            return {"id": user_id, "plan": "free"}
+
+        def count_projects_since(self, token, created_since):
+            return 5
+
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module.settings, "data_backend", "supabase")
+    monkeypatch.setattr(main_module, "managed_api", lambda: FakeManagedAPI())
+    app.dependency_overrides[main_module.optional_current_user] = lambda: CurrentUser("user-1", "authenticated", "test-token")
+    try:
+        response = TestClient(app).post(
+            "/v1/projects",
+            json={"title": "Blocked", "text": "Hello world.", "voice_id": "en-US-AriaNeural"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        monkeypatch.setattr(main_module.settings, "data_backend", "local")
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == {
+        "code": "GENERATION_LIMIT",
+        "plan": "free",
+        "limit": 5,
+        "window_minutes": 60,
+        "message": "The free plan allows 5 generations per hour.",
+    }
 
 
 def test_project_api_uses_local_job_flow(tmp_path, monkeypatch) -> None:

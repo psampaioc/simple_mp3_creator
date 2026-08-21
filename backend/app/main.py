@@ -91,9 +91,21 @@ ACTIVE_GENERATION_STATUSES = {"queued", "extracting", "generating", "tagging", "
 def enforce_generation_limits(api, user: CurrentUser) -> None:
     api.cleanup_stale_jobs_service(settings.queued_job_timeout_seconds, settings.running_job_timeout_seconds)
     created_since = datetime.now(timezone.utc) - timedelta(seconds=settings.generation_rate_limit_window_seconds)
+    profile = api.get_profile(user.access_token, user.id) or {}
+    plan = str(profile.get("plan") or "free")
+    generation_limit = 20 if plan == "paid" else settings.generation_rate_limit_count
     recent_count = api.count_projects_since(user.access_token, created_since.isoformat())
-    if recent_count >= settings.generation_rate_limit_count:
-        raise HTTPException(status_code=429, detail="Generation limit reached. Please try again later.")
+    if recent_count >= generation_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "GENERATION_LIMIT",
+                "plan": plan,
+                "limit": generation_limit,
+                "window_minutes": settings.generation_rate_limit_window_seconds // 60,
+                "message": f"The {plan} plan allows {generation_limit} generations per hour.",
+            },
+        )
 
 
 @app.get("/health")
