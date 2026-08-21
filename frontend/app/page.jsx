@@ -147,7 +147,7 @@ export default function HomePage() {
       })
       .catch((requestError) => setError(requestError.message));
     return undefined;
-  }, [project, session]);
+  }, [project?.id, project?.status, session?.access_token]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = playbackRate;

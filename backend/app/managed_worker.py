@@ -11,7 +11,7 @@ from mutagen.mp3 import MP3
 
 from app.document_extract import extract_document
 from app.media import EdgeTTSProvider, FakeTTSProvider, PiperTTSProvider, add_metadata, normalize_text, synthesize_sync
-from app.settings import settings
+from app.settings import piper_model_path_for_locale, settings
 
 
 class ManagedMediaAPI(Protocol):
@@ -91,7 +91,7 @@ def generate_managed_audio_service(project: dict[str, object], job: dict[str, ob
             if not source_text:
                 raise ValueError("empty text")
             if settings.tts_provider == "piper":
-                synthesize_sync(PiperTTSProvider(settings.piper_model_path), source_text, output)
+                synthesize_sync(PiperTTSProvider(piper_model_path_for_locale(str(project.get("locale") or ""))), source_text, output)
             elif settings.tts_provider == "edge-tts":
                 synthesize_sync(EdgeTTSProvider(str(project["voice_id"])), source_text, output)
             else:
